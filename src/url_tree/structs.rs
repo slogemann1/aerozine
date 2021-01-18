@@ -6,7 +6,14 @@ use serde::{ Serialize, Deserialize };
 pub enum FileType {
     Dynamic(DynamicObject),
     Link(LinkObject),
-    Normal((Path, String))
+    Normal(NormalFile)
+}
+
+#[derive(Debug, Clone)]
+pub struct NormalFile {
+    pub domain: String,
+    pub path: Path,
+    pub mime_type: String
 }
 
 #[derive(Debug, Clone)]
@@ -15,7 +22,6 @@ pub struct UrlNode {
     pub domain: String,
     pub children: Vec<UrlNode>,
     pub data: Option<FileType>,
-    pub file: bool
 }
 
 impl UrlNode {
@@ -26,7 +32,6 @@ impl UrlNode {
             domain: self.domain.clone(),
             children: Vec::new(),
             data: Some(file_data),
-            file: true
         };
 
         if let None = path.parent() {
@@ -72,7 +77,6 @@ impl UrlNode {
                 name: name.clone(),
                 children: Vec::new(),
                 data: None,
-                file: false
             };
 
             let old_len = node_ref.children.len();
@@ -167,7 +171,7 @@ impl UrlNode {
                 format_string += &format!("{}", child_strings);
             }
             else {
-                format_string += &format!("{}\t--> {}", &tabs, child.name);
+                format_string += &format!("{}\t--> {} ({})", &tabs, child.name, child.text_url());
             }
 
             if i != len - 1 {
@@ -177,6 +181,20 @@ impl UrlNode {
         }
 
         format_string
+    }
+
+    fn text_url(&self) -> String {
+        if let None = self.data {
+            return String::new();
+        }
+
+        let text_path = match self.data.as_ref().unwrap() {
+            FileType::Normal(val) => &val.path.original,
+            FileType::Link(val) => &val.file_path,
+            FileType::Dynamic(val) => &val.out_path
+        };
+
+        String::from(text_path)
     }
 }
 
@@ -212,8 +230,8 @@ impl Path {
         }
     }
 
-    pub fn from_parent(relative: &Self, parent: &Self) -> Self {
-        let new_original = format!("{}/{}", relative.original, parent.original);
+    pub fn from_parent(parent: &Self, relative: &Self) -> Self {
+        let new_original = format!("{}/{}", parent.original, relative.original);
         Self::from_str(&new_original)
     }
 
@@ -250,6 +268,10 @@ impl Path {
     // This requires a non-empty Path
     pub fn last(&self) -> String {
         self.components[self.components.len() - 1].clone()
+    }
+
+    pub fn is_under_root(&self) -> bool {
+        self.components.len() == 0
     }
 }
 
@@ -310,14 +332,14 @@ pub struct Config {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DynamicObject {
-    pub path: String,
+    pub link_path: String,
     pub command: String,
     pub cmd_working_dir: String,
     pub cmd_env: Vec<EnvironmentValue>,
     pub pass_vals: bool,
     pub pass_temp_filename: bool,
-    pub mime_type: String,
-    pub path_name: String,
+    pub mime_type: Option<String>,
+    pub out_path: String,
     pub domain: Option<String>
 }
 
@@ -326,7 +348,7 @@ pub struct LinkObject {
     pub domain: Option<String>,
     pub file_path: String,
     pub link_path: String,
-    pub mime_type: String
+    pub mime_type: Option<String>
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

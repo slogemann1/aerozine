@@ -1,4 +1,4 @@
-//TODO: add dynamic and link to tree, handle domain, generation of links page (later)
+//TODO: add dynamic to tree, generation of links page (later), remove config files
 
 use std::io::Read;
 use std::fs::{ self, OpenOptions };
@@ -65,7 +65,7 @@ pub fn get_url_tree() -> () {
 
     // Create nodes
     let mut root_node = get_root_node(&settings);
-    create_tree(&sorted_config_list, &mut root_node, settings.never_exit);
+    create_tree(&sorted_config_list, &mut root_node, &settings);
     println!("{}", root_node);
 }
 
@@ -126,32 +126,56 @@ fn get_root_node(settings: &ServerSettings) -> UrlNode {
         name: settings.root.clone(),
         children: Vec::new(),
         data: None,
-        file: false
     }
 }
 
-fn create_tree(config_list: &Vec<ConfigWithPath>, root_node: &mut UrlNode, never_exit: bool) {
+fn create_tree(config_list: &Vec<ConfigWithPath>, root_node: &mut UrlNode, settings: &ServerSettings) {
+    let never_exit = settings.never_exit;
+    let root_dir = settings.root.clone();
+    let root_path = Path::from_str(&root_dir);
+    let root_depth = root_path.depth(); // For amount of values to skip
+
     for config in config_list {
         // Paths
         let real_config_dir_path = config.path.parent().unwrap(); // All config files have a parent folder
-        let config_dir_path = real_config_dir_path.skip_components(1);
+        let config_dir_path = real_config_dir_path.skip_components(root_depth);
+        
+        // Domain 
+        let domain = match &config.config.domain {
+            Some(val) => String::from(val),
+            None => String::from(&settings.domain)
+        };
 
         // Handle whitelist / blacklist:
+
+        // Get all files with respect to root
         let all_files = find_all_files(&real_config_dir_path.original, never_exit);
-            let all_file_paths: Vec<Path> = all_files.into_iter().map(|file_path| {
-                Path::from_str(&file_path).skip_components(1)
-            }).collect();
+        let all_file_paths: Vec<Path> = all_files.into_iter().map(|file_path| {
+            Path::from_str(&file_path).skip_components(root_depth)
+        }).collect();
 
         if config.config.default_whitelist {
-            // Add all files
             for file_path in all_file_paths {
-                root_node.add_file_path(&file_path, FileType::Normal(file_path.clone()));
+                // Get path including root
+                let path = Path::from_parent(&root_path, &file_path);
+
+                // Add file
+                let file_data = NormalFile {
+                    domain: domain.clone(),
+                    path: path.clone(),
+                    mime_type: get_mime_type(&path)
+                };
+                root_node.add_file_path(
+                    &file_path,
+                    FileType::Normal(file_data)
+                );
             }
 
             // Remove current blacklisted files
             for rel_path in &config.config.blacklist {
+                // Get file path with respect to root
                 let file_path;
-                if config_dir_path.components.len() == 0 { // If file is directly under root
+                if config_dir_path.is_under_root() {
                     file_path = String::from(rel_path);
                 }
                 else {
@@ -162,23 +186,76 @@ fn create_tree(config_list: &Vec<ConfigWithPath>, root_node: &mut UrlNode, never
                 root_node.remove_path(&file_path);
             }
         }
-        else { // Remove all sub-files otherwise
+        else {
+            // Remove all sub-files otherwise
             for file_path in all_file_paths {
                 root_node.remove_path(&file_path);
             }
 
+            // Add all whitelisted files
             for rel_path in &config.config.whitelist {
+                // Get file path with respect to root
                 let file_path;
-                if config_dir_path.components.len() == 0 { // If file is directly under root
-                    file_path = String::from(rel_path);
+                if config_dir_path.is_under_root() {
+                    file_path = Path::from_str(&rel_path);
                 }
                 else {
-                    file_path = format!("{}/{}", config_dir_path.original.clone(), rel_path);
+                    file_path = Path::from_parent(&config_dir_path, &Path::from_str(&rel_path));
                 }
-                let file_path = Path::from_str(&file_path);
                 
-                root_node.add_file_path(&file_path, FileType::Normal(file_path.clone()));
+                // Get path including root 
+                let path = Path::from_parent(&root_path, &file_path);
+
+                // Add file
+                let file_data = NormalFile {
+                    domain: domain.clone(),
+                    path: path.clone(),
+                    mime_type: get_mime_type(&path)
+                };
+                root_node.add_file_path(
+                    &file_path,
+                    FileType::Normal(file_data)
+                );
             }
+        }
+
+        // Handle links:
+
+        for link_obj in &config.config.link {
+            let mut link_obj = link_obj.clone();
+            let rel_path = link_obj.link_path.clone(); // Relative link path
+
+            // Set domain to default if not defined
+            if let None = link_obj.domain {
+                link_obj.domain = Some(domain.clone());
+            }
+            // Infer mime type if not defined
+            if let None = link_obj.mime_type {
+                link_obj.mime_type = Some(
+                    get_mime_type(&Path::from_str(&rel_path))
+                );
+            }
+
+            // Get link path with respect to root
+            let (link_path, file_path);
+            if config_dir_path.is_under_root() {
+                link_path = Path::from_str(&rel_path);
+                file_path = Path::from_parent(&root_path, &Path::from_str(&link_obj.file_path));
+            }
+            else {
+                link_path = Path::from_parent(&config_dir_path, &Path::from_str(&rel_path));
+                file_path = Path::from_parent(
+                    &Path::from_parent(&root_path, &config_dir_path),
+                    &Path::from_str(&link_obj.file_path)
+                );
+            }
+
+            // Add file
+            link_obj.file_path = file_path.original;
+            root_node.add_file_path(
+                &link_path,
+                FileType::Link(link_obj)
+            );
         }
     }
 }
@@ -241,4 +318,20 @@ fn find_all_files(dir_path: &str, never_exit: bool) -> Vec<String> {
     all_files.into_iter().map(|path| {
         path.replace("\\", "/")
     }).collect()
+}
+
+//TODO: add more mime types
+fn get_mime_type(path: &Path) -> String {
+    let file_name = path.last();
+    let name_parts: Vec<&str> = file_name.split(".").collect(); // Path must at least contain 1 element
+    let ext = name_parts[name_parts.len() - 1];
+
+    let mime = match ext {
+        "gmi" => "text/gemini",
+        "txt" => "text/plain",
+        "html" => "text/html",
+        _ => "text/plain"
+    };
+
+    String::from(mime)
 }
