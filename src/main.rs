@@ -9,6 +9,7 @@ mod url_tree;
 
 fn main() {
     url_tree::get_url_tree();
+    println!("done");
     server::run_server();
 }
 
