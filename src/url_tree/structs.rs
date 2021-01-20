@@ -191,7 +191,7 @@ impl UrlNode {
         let text_path = match self.data.as_ref().unwrap() {
             FileType::Normal(val) => &val.path.original,
             FileType::Link(val) => &val.file_path,
-            FileType::Dynamic(val) => &val.out_path
+            FileType::Dynamic(_) => "\"dynamic\""
         };
 
         String::from(text_path)
@@ -281,6 +281,7 @@ pub struct ServerSettings {
     pub domain: String,
     pub root: String,
     pub tls_profile: String,
+    pub profile_password: String,
     pub error_profile: Option<String>,
     pub config_files: Vec<String>,
     pub max_dynamic_gen_time: u64,
@@ -297,14 +298,15 @@ pub struct ServerSettings {
 impl Default for ServerSettings {
     fn default() -> Self {
         ServerSettings {
-            domain: String::from(""),
+            domain: String::from("localhost"),
             root: String::from("root"),
             tls_profile: String::from("profile.pfx"),
+            profile_password: String::from("password"),
             error_profile: None,
             config_files: vec![
-                String::from("root/config")
+                String::from("config.json")
             ],
-            max_dynamic_gen_time: 30,
+            max_dynamic_gen_time: 10,
             never_exit: false,
             default_lang: String::from("en"),
             default_charset: String::from("utf-8"),
@@ -319,7 +321,6 @@ impl Default for ServerSettings {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
-
     pub domain: Option<String>,
     pub whitelist: Vec<String>,
     pub blacklist: Vec<String>,
@@ -332,14 +333,13 @@ pub struct Config {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DynamicObject {
-    pub link_path: String,
+    pub link_path: String, // Relative
     pub command: String,
-    pub cmd_working_dir: String,
+    pub cmd_working_dir: String, // Absolute
     pub cmd_env: Vec<EnvironmentValue>,
     pub pass_vals: bool,
-    pub pass_temp_filename: bool,
     pub mime_type: Option<String>,
-    pub out_path: String,
+    pub gen_time: Option<u64>,
     pub domain: Option<String>
 }
 

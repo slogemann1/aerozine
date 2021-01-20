@@ -1,3 +1,5 @@
+//TODO: make sure random files for dynamic content are deleted or added to list to not be reused
+
 use std::net::{ TcpListener, TcpStream };
 use std::sync::Arc;
 use std::fs::File;

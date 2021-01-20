@@ -1,4 +1,4 @@
-//TODO: add dynamic to tree, generation of links page (later), remove config files
+//TODO: generation of links page (later), remove config files
 
 use std::io::Read;
 use std::fs::{ self, OpenOptions };
@@ -220,12 +220,11 @@ fn create_tree(config_list: &Vec<ConfigWithPath>, root_node: &mut UrlNode, setti
         }
 
         // Handle links:
-
         for link_obj in &config.config.link {
             let mut link_obj = link_obj.clone();
             let rel_path = link_obj.link_path.clone(); // Relative link path
 
-            // Set domain to default if not defined
+            // Set domain to config domain if not defined
             if let None = link_obj.domain {
                 link_obj.domain = Some(domain.clone());
             }
@@ -255,6 +254,41 @@ fn create_tree(config_list: &Vec<ConfigWithPath>, root_node: &mut UrlNode, setti
             root_node.add_file_path(
                 &link_path,
                 FileType::Link(link_obj)
+            );
+        }
+
+        // Handle dynamic content:
+        for dynamic_obj in &config.config.dynamic {
+            let mut dynamic_obj = dynamic_obj.clone();
+
+            // Infer mime type if not defined
+            if let None = dynamic_obj.mime_type {
+                dynamic_obj.mime_type = Some(
+                    get_mime_type(&Path::from_str(&dynamic_obj.link_path))
+                );
+            }
+            // Use default gen time if not defined
+            if let None = dynamic_obj.gen_time {
+                dynamic_obj.gen_time = Some(settings.max_dynamic_gen_time);
+            }
+            // Use config domain if not defined
+            if let None = dynamic_obj.domain {
+                dynamic_obj.domain = Some(domain.clone());
+            }
+
+            // Get link path relative to root
+            let link_path;
+            if config_dir_path.is_under_root() {
+                link_path = Path::from_str(&dynamic_obj.link_path);
+            }
+            else {
+                link_path = Path::from_parent(&config_dir_path, &Path::from_str(&dynamic_obj.link_path));
+            }
+
+            // Add path
+            root_node.add_file_path(
+                &link_path,
+                FileType::Dynamic(dynamic_obj)
             );
         }
     }
