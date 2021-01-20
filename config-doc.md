@@ -6,7 +6,7 @@ described in the following.
 This file is used to determine the settings that are valid for the entire server.
 It should be placed in the working directory of the server program and
 must be named "server_settings.json." The format is as follows:
-```json
+```js
 {
     // The default domain that will be requested, defaults to "localhost"
     "domain": "www.example.com",
@@ -67,7 +67,7 @@ long as they are specified within a higher config file or the server settings.
 directory as that could result in conflicting settings. Furthermore, these files
 will not be part of the url tree regardless of whether they have been whitelisted
 or not.** The format is as follows:
-```json
+```js
 {
     // This specifies the domain of the file. If set to null it will default to
     // the domain specified in the server settings, defaults to null
@@ -99,7 +99,7 @@ dynamically generated content at a specific url path. A unique temporary filenam
 will be provided as the first argument to the program generating the content in the
 format: __unique_file_path="/some/path/here". This path will be absolute. The format
 for the dynamic object is as follows:
-```json
+```js
 {
     // The url path for the content to be requested at, relative to the parent directory
     // of the current config file
@@ -140,7 +140,7 @@ This object specifies url links to other files. This can be used to either provi
 distinct urls for a specific file or to show content under a different name than it is
 saved to disk as. Note that this can only link to acutal files and not dynamically generated
 content or other links. The format is as follows:
-```json
+```js
 {
     // This determines the domain of the file. If it is null, the domain of the
     // config file is used

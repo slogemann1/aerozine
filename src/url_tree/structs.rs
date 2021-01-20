@@ -19,7 +19,6 @@ pub struct NormalFile {
 #[derive(Debug, Clone)]
 pub struct UrlNode {
     pub name: String,
-    pub domain: String,
     pub children: Vec<UrlNode>,
     pub data: Option<FileType>,
 }
@@ -29,7 +28,6 @@ impl UrlNode {
     pub fn add_file_path(&mut self, path: &Path, file_data: FileType) {
         let new_node = UrlNode {
             name: path.last(),
-            domain: self.domain.clone(),
             children: Vec::new(),
             data: Some(file_data),
         };
@@ -38,12 +36,32 @@ impl UrlNode {
             if !self.has_child(&path.last()) {
                 self.children.push(new_node);
             }
+            else {
+                let child = self.get_child(&path.last()).unwrap(); // Must have child due to previous check
+                if child.get_domain() != new_node.get_domain() { // If domains differ add anyway
+                    self.children.push(new_node);
+                }
+                else { // Else mutate value 
+                    child.data = new_node.data;
+                }
+            }
         }
         else if let None = self.get_child_from_path(path) {
             let parent_path = path.parent().unwrap();
             self.add_dir_path(&parent_path);
             let path_end = self.get_child_from_path(&parent_path).unwrap(); // Just added path, must be found
             path_end.children.push(new_node);
+        }
+        else {
+            let child = self.get_child_from_path(path).unwrap(); // Must have child due to previous check
+            if child.get_domain() != new_node.get_domain() { //If domains differ add anyway
+                let parent_path = path.parent().unwrap();
+                let path_end = self.get_child_from_path(&parent_path).unwrap(); //Past must exist (previous check)
+                path_end.children.push(new_node);
+            }
+            else { // Else mutate value
+                child.data = new_node.data;
+            }
         }
     }
 
@@ -53,7 +71,6 @@ impl UrlNode {
             return;
         }
 
-        let domain = self.domain.clone();
         let mut node_ref = self;
         let path_components = path.components.clone();
 
@@ -73,7 +90,6 @@ impl UrlNode {
 
             // Else add new child node
             let new_node = UrlNode {
-                domain: domain.clone(),
                 name: name.clone(),
                 children: Vec::new(),
                 data: None,
@@ -102,12 +118,11 @@ impl UrlNode {
             i += 1;
         }
 
-        let mut i = 0;
-        let len = node_ref.children.len();
-        while i < len {
-            if node_ref.children[i].name == path.last() {
-                node_ref.children.remove(i);
-                break;
+        let mut i: i32 = 0;
+        while (i as usize) < node_ref.children.len() {
+            if node_ref.children[i as usize].name == path.last() {
+                node_ref.children.remove(i as usize);
+                i -= 1; // Remove all instances, no break
             }
 
             i += 1;
@@ -126,6 +141,15 @@ impl UrlNode {
         }
 
        Some(node_ref)
+    }
+
+    // Only call this if the type is file and the data has been initialized
+    pub fn get_domain<'a>(&'a self) -> &'a str {
+        match self.data.as_ref().unwrap() {
+            FileType::Normal(val) => &val.domain,
+            FileType::Link(val) => val.domain.as_ref().unwrap(),
+            FileType::Dynamic(val) => val.domain.as_ref().unwrap()
+        }
     }
 
     fn has_child(&self, child_name: &str) -> bool {
@@ -270,8 +294,12 @@ impl Path {
         self.components[self.components.len() - 1].clone()
     }
 
-    pub fn is_under_root(&self) -> bool {
+    pub fn is_root(&self) -> bool {
         self.components.len() == 0
+    }
+
+    pub fn root() -> Self {
+        Path::from_components(Vec::new())
     }
 }
 

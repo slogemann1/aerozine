@@ -1,7 +1,8 @@
-//TODO: generation of links page (later), remove config files
+//TODO: generation of links page (later), other pages from settings
 
 use std::io::Read;
 use std::fs::{ self, OpenOptions };
+use std::collections::HashMap;
 use serde_json;
 pub use structs::*;
 
@@ -66,7 +67,40 @@ pub fn get_url_tree() -> () {
     // Create nodes
     let mut root_node = get_root_node(&settings);
     create_tree(&sorted_config_list, &mut root_node, &settings);
-    println!("{}", root_node);
+
+    // Remove config files
+    for config in &sorted_config_list {
+        let root_depth = Path::from_str(&settings.root).depth();
+        let rel_path = config.path.skip_components(root_depth); // Get path with respect to root
+        
+        root_node.remove_path(&rel_path);
+    }
+
+    // Seperate domains
+    let mut nodes_with_path: HashMap<String, Vec<(Path, UrlNode)>> = HashMap::new();
+    let all_roots = seperate_roots(&root_node, Path::root(), &mut nodes_with_path);
+
+    // Organize nodes again
+    let mut organized_trees: Vec<UrlNode> = Vec::new();
+    let domains_with_nodes = nodes_with_path.drain();
+    for (domain, nodes_list) in domains_with_nodes {
+        let mut root_node = UrlNode {
+            name: domain.clone(),
+            children: Vec::new(),
+            data: None
+        };
+
+        for (path, node) in &nodes_list {
+            root_node.add_file_path(&path, node.data.clone().unwrap());
+        }
+
+        organized_trees.push(root_node);
+    }
+
+    println!("Trees:\n\n");
+    for tree in organized_trees {
+        println!("{}\n\n", tree);
+    }
 }
 
 fn read_settings() -> ServerSettings {
@@ -122,7 +156,6 @@ fn read_config_file(filename: &str) -> Config {
 
 fn get_root_node(settings: &ServerSettings) -> UrlNode {
     UrlNode {
-        domain: settings.domain.clone(),
         name: settings.root.clone(),
         children: Vec::new(),
         data: None,
@@ -154,6 +187,11 @@ fn create_tree(config_list: &Vec<ConfigWithPath>, root_node: &mut UrlNode, setti
             Path::from_str(&file_path).skip_components(root_depth)
         }).collect();
 
+        // Remove all sub-files
+        for file_path in &all_file_paths {
+            root_node.remove_path(file_path);
+        }
+
         if config.config.default_whitelist {
             for file_path in all_file_paths {
                 // Get path including root
@@ -175,28 +213,23 @@ fn create_tree(config_list: &Vec<ConfigWithPath>, root_node: &mut UrlNode, setti
             for rel_path in &config.config.blacklist {
                 // Get file path with respect to root
                 let file_path;
-                if config_dir_path.is_under_root() {
+                if config_dir_path.is_root() {
                     file_path = String::from(rel_path);
                 }
                 else {
                     file_path = format!("{}/{}", config_dir_path.original.clone(), rel_path);
                 }
                 let file_path = Path::from_str(&file_path);
-                
+
                 root_node.remove_path(&file_path);
             }
         }
         else {
-            // Remove all sub-files otherwise
-            for file_path in all_file_paths {
-                root_node.remove_path(&file_path);
-            }
-
             // Add all whitelisted files
             for rel_path in &config.config.whitelist {
                 // Get file path with respect to root
                 let file_path;
-                if config_dir_path.is_under_root() {
+                if config_dir_path.is_root() {
                     file_path = Path::from_str(&rel_path);
                 }
                 else {
@@ -237,7 +270,7 @@ fn create_tree(config_list: &Vec<ConfigWithPath>, root_node: &mut UrlNode, setti
 
             // Get link path with respect to root
             let (link_path, file_path);
-            if config_dir_path.is_under_root() {
+            if config_dir_path.is_root() {
                 link_path = Path::from_str(&rel_path);
                 file_path = Path::from_parent(&root_path, &Path::from_str(&link_obj.file_path));
             }
@@ -278,7 +311,7 @@ fn create_tree(config_list: &Vec<ConfigWithPath>, root_node: &mut UrlNode, setti
 
             // Get link path relative to root
             let link_path;
-            if config_dir_path.is_under_root() {
+            if config_dir_path.is_root() {
                 link_path = Path::from_str(&dynamic_obj.link_path);
             }
             else {
@@ -290,6 +323,34 @@ fn create_tree(config_list: &Vec<ConfigWithPath>, root_node: &mut UrlNode, setti
                 &link_path,
                 FileType::Dynamic(dynamic_obj)
             );
+        }
+    }
+}
+
+fn seperate_roots(node: &UrlNode, path: Path, nodes_with_path: &mut HashMap<String, Vec<(Path, UrlNode)>>) {
+    for child in &node.children {
+        // Get path relative to root
+        let rel_path;
+        if path.is_root() {
+            rel_path = Path::from_str(&child.name);
+        }
+        else {
+            rel_path = Path::from_parent(&path, &Path::from_str(&child.name));
+        }
+
+        // Add file endpoints to hashmap recursively
+        if child.children.len() != 0 {
+            seperate_roots(child, rel_path.clone(), nodes_with_path);
+        }
+        match &child.data {
+            Some(_) => {
+                let domain = child.get_domain().to_string();
+                let node_copy = child.clone();
+
+                let node_list = nodes_with_path.entry(domain).or_insert(Vec::new());
+                node_list.push((rel_path, node_copy));
+            },
+            None => continue
         }
     }
 }
