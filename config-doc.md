@@ -36,7 +36,10 @@ must be named "server_settings.json." The format is as follows:
     // This determines whether the program will panic on encountering errors while
     // loading the url tree, defaults to false
     "never_exit": false,
-    // The language of the files served by the server, defaults to "en"
+    // Determines whether or not error messages will be sent with responses to failed requests,
+    // defaults to false
+    "serve_errors": false,
+    // The language of the files served by the server, defaults to null
     "default_lang": "en",
     // The text encoding of the files served by the server, defaults to "utf-8"
     "default_charset": "utf-8",
@@ -103,7 +106,7 @@ for the dynamic object is as follows:
 {
     // The url path for the content to be requested at, relative to the parent directory
     // of the current config file
-    "link_path": "win/download",
+    "link_path": "download",
     // The command to execute the program
     "command": "builder",
     // The working directory for the program to be run in. This path should be absolute
@@ -113,13 +116,18 @@ for the dynamic object is as follows:
     "cmd_env": [
         {
             "key": "RUSTFLAGS",
-            "value": "-C target-feature=+crt-static --target x86_64-pc-windows-gnu"
+            "value": "-C target-feature=+crt-static"
         },
     ],
-    // This determines whether or not query values should be passed to the program.
-    // Values will be passed on the command line in the following format: key=value.
-    // Note that all characters will be escaped as needed
-    "pass_vals": false,
+    // This determines the parameters that should be requested at this url. Values
+    // will be passed on the command line in the following format: parameter=value.
+    // Note that all characters will be escaped as needed, defaults to []
+    "parameters": [
+        {
+            "parameter": "arch", // The name of the parameter
+            "private": false // Whether or not the parameter contains sensitive information
+        }
+    ],
     // An optional parameter to set the mime-type of the content in the case that
     // it should not be able to be inferred (files without extensions). If it is
     // null, the type is inferred
@@ -160,3 +168,6 @@ content or other links. The format is as follows:
     - Generate link page
     - Add error profile
     - Add caching mechanism for dynamically generated content
+    - Add logging options
+    - Add redirect options
+    - Add support for certificates

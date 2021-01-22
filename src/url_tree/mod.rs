@@ -8,8 +8,7 @@ pub use structs::*;
 
 mod structs;
 
-//TODO: maybe make struct for tree
-pub fn get_url_tree() -> () {
+pub fn get_url_tree() -> UrlTree {
     // Read top level settings
     let settings = read_settings();
 
@@ -78,7 +77,7 @@ pub fn get_url_tree() -> () {
 
     // Seperate domains
     let mut nodes_with_path: HashMap<String, Vec<(Path, UrlNode)>> = HashMap::new();
-    let all_roots = seperate_roots(&root_node, Path::root(), &mut nodes_with_path);
+    seperate_roots(&root_node, Path::root(), &mut nodes_with_path);
 
     // Organize nodes again
     let mut organized_trees: Vec<UrlNode> = Vec::new();
@@ -97,9 +96,9 @@ pub fn get_url_tree() -> () {
         organized_trees.push(root_node);
     }
 
-    println!("Trees:\n\n");
-    for tree in organized_trees {
-        println!("{}\n\n", tree);
+    UrlTree {
+        settings: settings,
+        roots: organized_trees
     }
 }
 
@@ -205,7 +204,10 @@ fn create_tree(config_list: &Vec<ConfigWithPath>, root_node: &mut UrlNode, setti
                 };
                 root_node.add_file_path(
                     &file_path,
-                    FileType::Normal(file_data)
+                    FileData::from_file_type(
+                        FileType::Normal(file_data),
+                        settings.never_exit
+                    )
                 );
             }
 
@@ -247,7 +249,10 @@ fn create_tree(config_list: &Vec<ConfigWithPath>, root_node: &mut UrlNode, setti
                 };
                 root_node.add_file_path(
                     &file_path,
-                    FileType::Normal(file_data)
+                    FileData::from_file_type(
+                        FileType::Normal(file_data),
+                        settings.never_exit,
+                    )
                 );
             }
         }
@@ -286,7 +291,10 @@ fn create_tree(config_list: &Vec<ConfigWithPath>, root_node: &mut UrlNode, setti
             link_obj.file_path = file_path.original;
             root_node.add_file_path(
                 &link_path,
-                FileType::Link(link_obj)
+                FileData::from_file_type(
+                    FileType::Link(link_obj),
+                    settings.never_exit
+                )
             );
         }
 
@@ -321,7 +329,10 @@ fn create_tree(config_list: &Vec<ConfigWithPath>, root_node: &mut UrlNode, setti
             // Add path
             root_node.add_file_path(
                 &link_path,
-                FileType::Dynamic(dynamic_obj)
+                FileData::from_file_type(
+                    FileType::Dynamic(dynamic_obj),
+                    settings.never_exit
+                )
             );
         }
     }

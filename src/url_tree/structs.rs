@@ -1,12 +1,76 @@
 use std::default::Default;
 use std::fmt::{ Display, Formatter };
+use std::fs;
 use serde::{ Serialize, Deserialize };
+
+#[derive(Debug, Clone)]
+pub struct UrlNode {
+    pub name: String,
+    pub children: Vec<UrlNode>,
+    pub data: Option<FileData>,
+}
+
+#[derive(Debug, Clone)]
+pub struct UrlTree {
+    pub settings: ServerSettings,
+    pub roots: Vec<UrlNode>,
+}
+
+#[derive(Debug, Clone)]
+pub struct FileData {
+    pub meta_data: FileType,
+    pub binary_data: Option<Vec<u8>>
+}
+
+impl FileData {
+    pub fn from_file_type(file_type: FileType, never_exit: bool) -> Self {
+        let file_path = match &file_type {
+            FileType::Dynamic(val) => return FileData {
+                meta_data: FileType::Dynamic(val.clone()),
+                binary_data: None
+            },
+            FileType::Link(val) => &val.file_path,
+            FileType::Normal(val) => &val.path.original
+        };
+
+        let binary_data = match fs::read(file_path) {
+            Ok(val) => val,
+            Err(err) => {
+                if never_exit {
+                    println!("Warning: Could not read the file at {} to memory. {}", file_path, err);
+                    return FileData {
+                        meta_data: file_type,
+                        binary_data: None
+                    }
+                }
+                else {
+                    panic!("Error: Could not read the file at {} to memory. {}", file_path, err);
+                }
+            }
+        };
+
+        FileData {
+            meta_data: file_type,
+            binary_data: Some(binary_data)
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub enum FileType {
     Dynamic(DynamicObject),
     Link(LinkObject),
     Normal(NormalFile)
+}
+
+impl FileType {
+    pub fn get_mime_type<'a>(&'a self) -> &'a str {
+        match self {
+            FileType::Dynamic(val) => &val.mime_type.as_ref().unwrap(), // Mime-type has been initialized at this point
+            FileType::Link(val) => &val.mime_type.as_ref().unwrap(), //Same as above
+            FileType::Normal(val) => &val.mime_type
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -16,16 +80,9 @@ pub struct NormalFile {
     pub mime_type: String
 }
 
-#[derive(Debug, Clone)]
-pub struct UrlNode {
-    pub name: String,
-    pub children: Vec<UrlNode>,
-    pub data: Option<FileType>,
-}
-
 impl UrlNode {
     // This will not do anything if the file is already present
-    pub fn add_file_path(&mut self, path: &Path, file_data: FileType) {
+    pub fn add_file_path(&mut self, path: &Path, file_data: FileData) {
         let new_node = UrlNode {
             name: path.last(),
             children: Vec::new(),
@@ -37,7 +94,7 @@ impl UrlNode {
                 self.children.push(new_node);
             }
             else {
-                let child = self.get_child(&path.last()).unwrap(); // Must have child due to previous check
+                let child = self.get_child_mut(&path.last()).unwrap(); // Must have child due to previous check
                 if child.get_domain() != new_node.get_domain() { // If domains differ add anyway
                     self.children.push(new_node);
                 }
@@ -46,17 +103,17 @@ impl UrlNode {
                 }
             }
         }
-        else if let None = self.get_child_from_path(path) {
+        else if let None = self.get_child_from_path_mut(path) {
             let parent_path = path.parent().unwrap();
             self.add_dir_path(&parent_path);
-            let path_end = self.get_child_from_path(&parent_path).unwrap(); // Just added path, must be found
+            let path_end = self.get_child_from_path_mut(&parent_path).unwrap(); // Just added path, must be found
             path_end.children.push(new_node);
         }
         else {
-            let child = self.get_child_from_path(path).unwrap(); // Must have child due to previous check
+            let child = self.get_child_from_path_mut(path).unwrap(); // Must have child due to previous check
             if child.get_domain() != new_node.get_domain() { //If domains differ add anyway
                 let parent_path = path.parent().unwrap();
-                let path_end = self.get_child_from_path(&parent_path).unwrap(); //Past must exist (previous check)
+                let path_end = self.get_child_from_path_mut(&parent_path).unwrap(); //Past must exist (previous check)
                 path_end.children.push(new_node);
             }
             else { // Else mutate value
@@ -82,7 +139,7 @@ impl UrlNode {
             // If child exists, move reference
             if node_ref.has_child(name)
             {
-                let child = node_ref.get_child(name).unwrap();
+                let child = node_ref.get_child_mut(name).unwrap();
                 node_ref = child;
                 i += 1;
                 continue;
@@ -110,7 +167,7 @@ impl UrlNode {
         let mut i = 0;
         let len = components.len();
         while i < len - 1 {
-            node_ref = match node_ref.get_child(&components[i]) {
+            node_ref = match node_ref.get_child_mut(&components[i]) {
                 Some(val) => val,
                 None => return
             };
@@ -129,7 +186,21 @@ impl UrlNode {
         }
     }
 
-    pub fn get_child_from_path<'a>(&'a mut self, path: &Path) -> Option<&'a mut UrlNode> {
+    pub fn get_child_from_path_mut<'a>(&'a mut self, path: &Path) -> Option<&'a mut UrlNode> {
+        let mut node_ref = self;
+        let components = &path.components;
+
+        for name in components {
+            node_ref = match node_ref.get_child_mut(&name) {
+                Some(val) => val,
+                None => return None
+            };
+        }
+
+       Some(node_ref)
+    }
+
+    pub fn get_child_from_path<'a>(&'a self, path: &Path) -> Option<&'a UrlNode> {
         let mut node_ref = self;
         let components = &path.components;
 
@@ -145,7 +216,7 @@ impl UrlNode {
 
     // Only call this if the type is file and the data has been initialized
     pub fn get_domain<'a>(&'a self) -> &'a str {
-        match self.data.as_ref().unwrap() {
+        match &self.data.as_ref().unwrap().meta_data {
             FileType::Normal(val) => &val.domain,
             FileType::Link(val) => val.domain.as_ref().unwrap(),
             FileType::Dynamic(val) => val.domain.as_ref().unwrap()
@@ -162,12 +233,25 @@ impl UrlNode {
         false
     }
 
-    fn get_child<'a>(&'a mut self, child_name: &str) -> Option<&'a mut UrlNode> {
+    fn get_child_mut<'a>(&'a mut self, child_name: &str) -> Option<&'a mut UrlNode> {
         let len = self.children.len();
         let mut i = 0;
         while i < len {
             if self.children[i].name == child_name {
                 return Some(&mut self.children[i]);
+            }
+            i += 1;
+        }
+
+        None
+    }
+
+    fn get_child<'a>(&'a self, child_name: &str) -> Option<&'a UrlNode> {
+        let len = self.children.len();
+        let mut i = 0;
+        while i < len {
+            if self.children[i].name == child_name {
+                return Some(&self.children[i]);
             }
             i += 1;
         }
@@ -212,7 +296,7 @@ impl UrlNode {
             return String::new();
         }
 
-        let text_path = match self.data.as_ref().unwrap() {
+        let text_path = match &self.data.as_ref().unwrap().meta_data {
             FileType::Normal(val) => &val.path.original,
             FileType::Link(val) => &val.file_path,
             FileType::Dynamic(_) => "\"dynamic\""
@@ -303,7 +387,7 @@ impl Path {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ServerSettings {
     pub domain: String,
@@ -314,7 +398,8 @@ pub struct ServerSettings {
     pub config_files: Vec<String>,
     pub max_dynamic_gen_time: u64,
     pub never_exit: bool,
-    pub default_lang: String,
+    pub serve_errors: bool,
+    pub default_lang: Option<String>,
     pub default_charset: String,
     pub homepage: Option<String>,
     pub gen_doc_page: bool,
@@ -336,7 +421,8 @@ impl Default for ServerSettings {
             ],
             max_dynamic_gen_time: 10,
             never_exit: false,
-            default_lang: String::from("en"),
+            serve_errors: false,
+            default_lang: None,
             default_charset: String::from("utf-8"),
             homepage: None,
             gen_doc_page: true,
@@ -350,10 +436,14 @@ impl Default for ServerSettings {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     pub domain: Option<String>,
+    #[serde(default = "Vec::new")]
     pub whitelist: Vec<String>,
+    #[serde(default = "Vec::new")]
     pub blacklist: Vec<String>,
     pub default_whitelist: bool,
+    #[serde(default = "Vec::new")]
     pub dynamic: Vec<DynamicObject>,
+    #[serde(default = "Vec::new")]
     pub link: Vec<LinkObject>,
     #[serde(default = "Vec::new")]
     pub config_files: Vec<String>,
@@ -365,7 +455,8 @@ pub struct DynamicObject {
     pub command: String,
     pub cmd_working_dir: String, // Absolute
     pub cmd_env: Vec<EnvironmentValue>,
-    pub pass_vals: bool,
+    #[serde(default = "Vec::new")]
+    pub parameters: Vec<QueryParameter>,
     pub mime_type: Option<String>,
     pub gen_time: Option<u64>,
     pub domain: Option<String>
@@ -383,4 +474,10 @@ pub struct LinkObject {
 pub struct EnvironmentValue {
     pub key: String,
     pub value: String
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QueryParameter {
+    pub parameter: String,
+    pub private: bool
 }
