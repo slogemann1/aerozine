@@ -21,7 +21,7 @@ pub enum StatusCode {
     BadRequest,
     CertificateRequired, //TODO
     CertificateUnauthorized, //TODO
-    CertificateInvalid
+    CertificateInvalid //TODO
 }
 
 impl StatusCode {
@@ -78,7 +78,7 @@ impl Response {
 pub struct Request {
     pub domain: String,
     pub path: String,
-    pub parameters: Vec<(String, String)>
+    pub query: Option<String>
 }
 
 pub fn parse_request(bytes: &[u8]) -> Result<Request> {
@@ -86,43 +86,27 @@ pub fn parse_request(bytes: &[u8]) -> Result<Request> {
         Ok(val) => val,
         Err(_) => {
             return Err(ServerError::from_str(
-                "Error: Request not in utf-8 form",
+                "Error: Request not in utf-8 encoding",
                 StatusCode::BadRequest
             ));
         }
     };
 
+    let request_string = request_string.replace("gemini://", "").replace("\r\n", "");
+
     // Seperate request into url and parameters
     let url;
-    let mut params: Vec<(String, String)> = Vec::new();
+    let mut query: Option<String> = None;
     let mut parts: Vec<&str> = request_string.splitn(2, "?").collect();
     if parts.len() == 1 {
         url = parts.pop().unwrap().to_string();
     }
     else {
-        let param_val_pairs: Vec<&str> = parts.pop().unwrap().split("&").collect();
-        for param_and_val in param_val_pairs {
-            let mut param_and_val: Vec<&str> = param_and_val.split("+").collect();
-            if param_and_val.len() != 2 {
-                return Err(ServerError::new(
-                    format!(
-                        "Error: Invalid pairing of parameters and values in request. Request: {}",
-                        &request_string
-                    ),
-                    StatusCode::BadRequest
-                ));
-            }
-
-            let val = param_and_val.pop().unwrap();
-            let param = param_and_val.pop().unwrap();
-            params.push((param.to_string(), val.to_string()));
-        }
-
+        query = Some(parts.pop().unwrap().to_string());
         url = parts.pop().unwrap().to_string();
     }
 
     // Get domain and path from url
-    let url = url.replace("gemini://", "").replace("\r\n", "");
     let mut domain_and_path: Vec<&str> = url.splitn(2, "/").collect();
     if domain_and_path.len() != 2 {
         return Err(ServerError::new(
@@ -138,9 +122,9 @@ pub fn parse_request(bytes: &[u8]) -> Result<Request> {
 
     Ok(
         Request {
-            domain: domain,
-            path: path,
-            parameters: params
+            domain,
+            path,
+            query
         }
     )
 }

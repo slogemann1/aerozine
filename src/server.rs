@@ -1,19 +1,24 @@
-//TODO: make sure random files for dynamic content are deleted or added to list to not be reused
-//TODO: add links, dynamic objects, reading files if data not present
-
 use std::net::{ TcpListener, TcpStream };
-use std::sync::Arc;
-use std::fs::File;
+use std::sync::{ Arc, Mutex, MutexGuard };
+use std::fs::{ self, File };
 use std::io::{ Read, Write };
 use std::thread;
+use std::collections::HashMap;
+use std::process::Command;
+use std::fmt::Display;
+use std::time::{ Instant, Duration };
+use std::env;
 use native_tls::{ Identity, TlsAcceptor, TlsStream };
+use rand;
 use crate::{ Result, ServerError };
-use crate::url_tree::{
-    UrlTree, UrlNode, Path, FileType, NormalFile, LinkObject, DynamicObject, FileData
-};
+use crate::url_tree::{ UrlTree, UrlNode, Path, FileType, DynamicObject, FileData };
 use crate::protocol::{ self, Request, Response, StatusCode };
 
 const BUFFER_SIZE: usize = 2048;
+
+lazy_static! {
+    static ref UNIQUE_FILE_LIST: Mutex<HashMap<u64, Instant>> = Mutex::new(HashMap::new());
+}
 
 pub fn run_server(tree: UrlTree) {
     let tree = Arc::new(tree);
@@ -116,7 +121,7 @@ fn handle_request(request: &Request, tree: &UrlTree) -> Vec<u8> {
         Ok(val) => val,
         Err(err) => return get_err_response(err, tree.settings.serve_errors)
     };
-    let (body, mime) = match get_resource(node) {
+    let (body, mime) = match get_resource(node, &request.query) {
         Ok(val) => val,
         Err(err) => return get_err_response(err, tree.settings.serve_errors)
     };
@@ -169,10 +174,12 @@ fn search_in_tree<'a>(tree: &'a UrlTree, domain: &str, path: &str) -> Result<&'a
 }
 
 fn get_err_response(err: ServerError, serve_errors: bool) -> Vec<u8> {
-    let ServerError { message, status_code } = err;
+    let ServerError { message, status_code, is_meta } = err;
+
+    println!("{}", message);
 
     let response;
-    if serve_errors {
+    if serve_errors || is_meta {
         response = Response {
             status_code: status_code,
             meta: message,
@@ -191,14 +198,14 @@ fn get_err_response(err: ServerError, serve_errors: bool) -> Vec<u8> {
 }
 
 // Returns binary data and mime-type
-fn get_resource<'a>(node: &'a UrlNode) -> Result<(Vec<u8>, &'a str)> {
-    let not_found_err = Err(ServerError::new(
-        format!("Error: Resource not found"),
+fn get_resource<'a>(node: &'a UrlNode, query: &Option<String>) -> Result<(Vec<u8>, &'a str)> {
+    let not_found_err = || Err(ServerError::new(
+        String::from("Error: Resource not found"),
         StatusCode::NotFound
     ));
 
     let result = match &node.data {
-        Some(
+        Some( // Case data is already loaded
             FileData {
                 meta_data,
                 binary_data: Some(binary_data)
@@ -212,10 +219,194 @@ fn get_resource<'a>(node: &'a UrlNode) -> Result<(Vec<u8>, &'a str)> {
                 mime_type
             ))
         },
-        _ => not_found_err //TODO: change to none
+        Some( // Case data has not been loaded / Dynamic
+            FileData {
+                meta_data,
+                binary_data: None
+            }
+        ) => {
+            let binary_data = load_data(meta_data, query)?;
+            let mime_type = meta_data.get_mime_type();
+
+            Ok((
+                binary_data,
+                mime_type
+            ))
+        }
+        // Case node does not exist (file not found)
+        None => not_found_err()
     };
 
     result
+}
+
+fn load_data(file_type: &FileType, query: &Option<String>) -> Result<Vec<u8>> {
+    let internal_error = |err: &dyn Display| Err(ServerError::new(
+        format!("Error: Resource could not be retrieved. {}", err),
+        StatusCode::TemporaryFailure
+    ));
+    
+    if let FileType::Normal(val) = file_type { 
+        match fs::read(&val.path.original) {
+            Ok(val) => return Ok(val),
+            Err(err) => return internal_error(&err)
+        }
+    }
+    else if let FileType::Link(val) = file_type {
+        match fs::read(&val.file_path) {
+            Ok(val) => return Ok(val),
+            Err(err) => return internal_error(&err)
+        }
+    }
+    else if let FileType::Dynamic(val) = file_type {
+        return load_dynamic_content(val, query);
+    }
+    
+    internal_error(&"")
+}
+
+fn load_dynamic_content(dynamic_object: &DynamicObject, query: &Option<String>) -> Result<Vec<u8>> {
+    let cgi_error = |err: &dyn Display| Err(ServerError::new(
+        format!("Error: Process failed to generate content. {}", err),
+        StatusCode::CGIError
+    ));
+
+    // Insert an entry for the file
+    let temp_file_num;
+    let mut file_map = get_unique_file_list()?;
+    loop {
+        let random_num = rand::random::<u64>();
+        if file_map.contains_key(&random_num) {
+            continue;
+        }
+
+        file_map.insert(random_num, Instant::now());
+        temp_file_num = random_num;
+        break;
+    } 
+
+    // Get the path
+    let temp_file_path = match env::current_dir() {
+        Ok(mut val) => {
+            val.push("temp");
+            val.push(temp_file_num.to_string());
+            val
+        },
+        Err(err) => return cgi_error(&err)
+    };
+    let temp_file_path = temp_file_path.display().to_string();
+
+    // Create process
+    let mut process = Command::new(&dynamic_object.program_path);
+    process.current_dir(&dynamic_object.cmd_working_dir);
+    process.envs(
+        dynamic_object.cmd_env
+        .iter()
+        .map(|val| (val.key.clone(), val.value.clone()))
+    );
+
+    // Add command line arguments
+    if dynamic_object.args.len() != 0 {
+        process.args(dynamic_object.args.clone());
+    }
+
+    // Add path name
+    process.arg(
+        format!(
+            "unique_file_path=\"{}\"",
+            temp_file_path
+        )
+    );
+
+    // Handle query
+    if let Some(query_options) = &dynamic_object.query {
+        if let Some(query_value) = query {
+            process.arg(
+                format!(
+                    "query=\"{}\"",
+                    query_value
+                )
+            );
+        }
+        else {
+            let status_code = match query_options.private {
+                true => StatusCode::SensitiveInput,
+                false => StatusCode::Input
+            };
+
+            return Err(ServerError {
+                message: query_options.display_text.clone(),
+                is_meta: true,
+                status_code: status_code
+            });
+        }
+    }
+
+    // Start process
+    let mut process = match process.spawn() {
+        Ok(val) => val,
+        Err(err) => { println!("here"); return cgi_error(&err) }
+    };
+
+    // Poll process for completion, exit if time over
+    let start_time = Instant::now();
+    let gen_time = dynamic_object.gen_time.unwrap(); // gen_time is always set at this point
+    while start_time.elapsed().as_secs() < gen_time {
+        let poll_exit = process.try_wait();
+        if let Ok(Some(_)) = poll_exit {
+            return read_and_remove(&temp_file_path, temp_file_num);
+        }
+        else {
+            continue;
+        }
+    }
+
+    cgi_error(&"")
+}
+
+fn read_and_remove(file_name: &str, unique_num: u64) -> Result<Vec<u8>> {
+    let cgi_error = |err: &dyn Display| Err(ServerError::new(
+        format!("Error: Failed to read generated content. {}", err),
+        StatusCode::CGIError
+    ));
+
+    if !std::path::Path::new(file_name).exists() { // This entry will later be removed automatically
+        return cgi_error(&"No content was generated");
+    }
+
+    // Get the data
+    let data = match fs::read(file_name) {
+        Ok(val) => val,
+        Err(err) => return cgi_error(&err)
+    };
+
+    // Remove the entry
+    let mut file_map = match get_unique_file_list() {
+        Ok(val) => val,
+        Err(_) => return Ok(data)
+    };
+    file_map.remove(&unique_num);
+
+    Ok(data)
+}
+
+fn get_unique_file_list() -> Result<MutexGuard<'static, HashMap<u64, Instant>>> {
+    let cgi_error = || Err(ServerError::new(
+        String::from("Error: Too many clients at once"),
+        StatusCode::CGIError
+    ));
+
+    for _ in 0..10 {
+        match UNIQUE_FILE_LIST.lock() {
+            Ok(val) => return Ok(val),
+            Err(_) => ()
+        };
+
+        let sleep_time = Duration::from_millis((rand::random::<f32>() * 25.0) as u64); // Random time to avoid conflicts
+        thread::sleep(sleep_time)
+    }
+
+    cgi_error()
 }
 
 //TODO

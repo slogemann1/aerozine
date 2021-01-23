@@ -96,10 +96,10 @@ pub fn get_url_tree() -> UrlTree {
         organized_trees.push(root_node);
     }
 
-    UrlTree {
-        settings: settings,
-        roots: organized_trees
-    }
+    UrlTree::new(
+        settings,
+        organized_trees
+    )
 }
 
 fn read_settings() -> ServerSettings {

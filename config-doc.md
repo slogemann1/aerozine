@@ -5,7 +5,7 @@ described in the following.
 ## Server Settings
 This file is used to determine the settings that are valid for the entire server.
 It should be placed in the working directory of the server program and
-must be named "server_settings.json." The format is as follows:
+must be named "server_settings.json". The format is as follows:
 ```js
 {
     // The default domain that will be requested, defaults to "localhost"
@@ -20,10 +20,6 @@ must be named "server_settings.json." The format is as follows:
     "tls_profile": "profile.pfx",
     // The password to access the prior profile, defaults to "password"
     "profile_password": "password",
-    // The profile directory for personalized error pages relative to the
-    // directory from which the server is started, defaults to null. 
-    // Documentation for this can be found under TODO
-    "error_profile": None,
     // A list of configuration files relative to the path of the prior "root" key,
     // defaults to ["config.json"]
     "config_files": [
@@ -34,7 +30,8 @@ must be named "server_settings.json." The format is as follows:
     // for specific cases as well (see Dynamic Object section)
     "max_dynamic_gen_time": 10,
     // This determines whether the program will panic on encountering errors while
-    // loading the url tree, defaults to false
+    // loading the url tree, defaults to false. Further information can be
+    // found under the Never Exit section below
     "never_exit": false,
     // Determines whether or not error messages will be sent with responses to failed requests,
     // defaults to false
@@ -59,6 +56,14 @@ must be named "server_settings.json." The format is as follows:
     "ipv6": false
 }
 ```
+
+### Never Exit
+The never_exit flag in settings should primarily be used when debugging your settings. Its
+intended purpose is to display warnings instead of quitting in order to quickly find all problems.
+If enabled, this flag causes the following error cases to be shown as warnings:
+    - Two config files were found in the same directory (The first one is used)
+    - Directories could not be found / opened while finding files (These are skipped)
+    - Files can not be read into memory (These are skipped and with every request for their data this is retried)
 
 ## Config Files
 These files are used to describe the specific configuration of the files in
@@ -100,15 +105,19 @@ or not.** The format is as follows:
 This object specifies various parameters for the execution of a program to provide
 dynamically generated content at a specific url path. A unique temporary filename
 will be provided as the first argument to the program generating the content in the
-format: __unique_file_path="/some/path/here". This path will be absolute. The format
+format: unique_file_path="/some/path/here". This path will be absolute. The format
 for the dynamic object is as follows:
 ```js
 {
     // The url path for the content to be requested at, relative to the parent directory
     // of the current config file
     "link_path": "download",
-    // The command to execute the program
-    "command": "builder",
+    // The path to the program to be executed. It is absolute, but also reads from
+    // the environment path variable (e.g. both "/bin/sh" and "sh" are valid)
+    "program_path": "builder",
+    // The arguments to be passed to the program. These will be passed before the temporary
+    // file path and the query, defaults to []
+    "args": [],
     // The working directory for the program to be run in. This path should be absolute
     "cmd_working_dir": "/home/pi/Desktop/gemini-server",
     // A list of environment values and their keys which should determine the environment
@@ -119,13 +128,13 @@ for the dynamic object is as follows:
             "value": "-C target-feature=+crt-static"
         },
     ],
-    // This determines the parameters that should be requested at this url. Values
-    // will be passed on the command line in the following format: parameter=value.
-    // Note that all characters will be escaped as needed, defaults to []
-    "parameters": [
+    // This determines the query that should be requested at this url. The resulting
+    // value will be passed on the command line in the following format: query="value".
+    // Note that all characters will be escaped as needed, defaults to null
+    "query": [
         {
-            "parameter": "arch", // The name of the parameter
-            "private": false // Whether or not the parameter contains sensitive information
+            "display_text": "Enter your architecture", // The text prompt for retrieving the query
+            "private": false // Whether or not the query contains sensitive information
         }
     ],
     // An optional parameter to set the mime-type of the content in the case that
@@ -166,7 +175,6 @@ content or other links. The format is as follows:
 
 ## TODOs
     - Generate link page
-    - Add error profile
     - Add caching mechanism for dynamically generated content
     - Add logging options
     - Add redirect options

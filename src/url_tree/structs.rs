@@ -16,6 +16,15 @@ pub struct UrlTree {
     pub roots: Vec<UrlNode>,
 }
 
+impl UrlTree {
+    pub fn new(settings: ServerSettings, roots: Vec<UrlNode>) -> Self {
+        UrlTree {
+            settings,
+            roots
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct FileData {
     pub meta_data: FileType,
@@ -394,7 +403,6 @@ pub struct ServerSettings {
     pub root: String,
     pub tls_profile: String,
     pub profile_password: String,
-    pub error_profile: Option<String>,
     pub config_files: Vec<String>,
     pub max_dynamic_gen_time: u64,
     pub never_exit: bool,
@@ -415,7 +423,6 @@ impl Default for ServerSettings {
             root: String::from("root"),
             tls_profile: String::from("profile.pfx"),
             profile_password: String::from("password"),
-            error_profile: None,
             config_files: vec![
                 String::from("config.json")
             ],
@@ -452,11 +459,13 @@ pub struct Config {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DynamicObject {
     pub link_path: String, // Relative
-    pub command: String,
+    pub program_path: String, // Absolute
     pub cmd_working_dir: String, // Absolute
-    pub cmd_env: Vec<EnvironmentValue>,
     #[serde(default = "Vec::new")]
-    pub parameters: Vec<QueryParameter>,
+    pub args: Vec<String>,
+    pub cmd_env: Vec<EnvironmentValue>,
+    #[serde(default = "return_none")]
+    pub query: Option<Query>,
     pub mime_type: Option<String>,
     pub gen_time: Option<u64>,
     pub domain: Option<String>
@@ -477,7 +486,12 @@ pub struct EnvironmentValue {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct QueryParameter {
-    pub parameter: String,
+pub struct Query {
+    pub display_text: String,
     pub private: bool
+}
+
+// This is just for defaults for serde
+fn return_none<T>() -> Option<T> {
+    None
 }
