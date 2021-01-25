@@ -2,6 +2,7 @@ use std::default::Default;
 use std::fmt::{ Display, Formatter };
 use std::fs;
 use serde::{ Serialize, Deserialize };
+use crate::log;
 
 #[derive(Debug, Clone)]
 pub struct UrlNode {
@@ -46,7 +47,7 @@ impl FileData {
             Ok(val) => val,
             Err(err) => {
                 if never_exit {
-                    println!("Warning: Could not read the file at {} to memory. {}", file_path, err);
+                    log(&format!("Warning: Could not read the file at {} to memory. {}", file_path, err));
                     return FileData {
                         meta_data: file_type,
                         binary_data: None
@@ -407,6 +408,7 @@ pub struct ServerSettings {
     pub max_dynamic_gen_time: u64,
     pub never_exit: bool,
     pub serve_errors: bool,
+    pub log: bool,
     pub default_lang: Option<String>,
     pub default_charset: String,
     pub homepage: Option<String>,
@@ -429,6 +431,7 @@ impl Default for ServerSettings {
             max_dynamic_gen_time: 10,
             never_exit: false,
             serve_errors: false,
+            log: true,
             default_lang: None,
             default_charset: String::from("utf-8"),
             homepage: None,

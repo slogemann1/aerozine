@@ -1,4 +1,6 @@
 /target
 /data
 /root
+/temp
+log.txt
 server_settings.json

@@ -8,13 +8,16 @@ use std::process::Command;
 use std::fmt::Display;
 use std::time::{ Instant, Duration };
 use std::env;
+use std::error::Error;
 use native_tls::{ Identity, TlsAcceptor, TlsStream };
 use rand;
-use crate::{ Result, ServerError };
+use crate::{ log, Result, ServerError };
 use crate::url_tree::{ UrlTree, UrlNode, Path, FileType, DynamicObject, FileData };
 use crate::protocol::{ self, Request, Response, StatusCode };
 
 const BUFFER_SIZE: usize = 2048;
+const TEMP_DIR: &str = crate::TEMP_DIR;
+const FILE_MAP_DEL_TIME: u64 = 300; // How often the file id removal thread should be run (seconds)
 
 lazy_static! {
     static ref UNIQUE_FILE_LIST: Mutex<HashMap<u64, Instant>> = Mutex::new(HashMap::new());
@@ -23,6 +26,7 @@ lazy_static! {
 pub fn run_server(tree: UrlTree) {
     let tree = Arc::new(tree);
 
+    // Get certificate
     let cert_src = &tree.settings.tls_profile;
     let cert_passwd = &tree.settings.profile_password;
     let mut cert_file = File::open(cert_src).expect("Critical Error: Failed to open certificate");
@@ -30,6 +34,7 @@ pub fn run_server(tree: UrlTree) {
     cert_file.read_to_end(&mut certificate).expect("Critical Error: Failed to read certifcate");
     let identity = Identity::from_pkcs12(&certificate, cert_passwd).expect("Critical Error: Failed to create identity (bad certificate)");
 
+    // Create Tcp Listeners based on ipv4/6 settings
     let mut listeners: Vec<TcpListener> = Vec::new();
     if tree.settings.ipv6 {
         let listener = TcpListener::bind("[::]:1965").expect("Critical Error: Failed to bind to address (ipv6)");
@@ -40,13 +45,28 @@ pub fn run_server(tree: UrlTree) {
         listeners.push(listener);
     }
 
+    // Create Tls wrapper for acceptors based on certificate
     let acceptor = TlsAcceptor::new(identity.clone()).expect("Critical Error: Failed to initialize acceptor");
     let acceptor = Arc::new(acceptor);
     
+    // Spawn thread for removing unused file ids
+    thread::spawn(|| {
+        loop {
+            thread::sleep(Duration::from_secs(FILE_MAP_DEL_TIME));
+            clear_unique_file_list().and_then(|_| Ok(())).unwrap(); // Stupid stuff to silence warning
+        }
+    });
+
+    // Stop if neither ipv6 or ipv4 is enabled
     if listeners.len() == 0 {
         panic!("Critical Error: Either ipv4 or ipv6 must be enabled in the server settings to run the program");
     }
-    else if listeners.len() == 1 {
+
+    // Log start of server
+    log("Info: Started Server");
+
+    // Start server thread(s)
+    if listeners.len() == 1 {
         let listener0 = listeners.pop().unwrap();
         handle_server(listener0, acceptor, tree.clone());
     }
@@ -85,6 +105,7 @@ fn handle_server(listener: TcpListener, acceptor: Arc<TlsAcceptor>, tree: Arc<Ur
 fn handle_client(mut client: TlsStream<TcpStream>, tree: Arc<UrlTree>) {
     let mut buffer = [0; BUFFER_SIZE];
 
+    // Read and parse request from client
     let num_bytes = match client.read(&mut buffer) {
         Ok(val) => val,
         Err(_) => {
@@ -100,6 +121,7 @@ fn handle_client(mut client: TlsStream<TcpStream>, tree: Arc<UrlTree>) {
         }
     };
 
+    // Generate response and send it to client
     let response = handle_request(&request, &tree);
     match client.write(&response) {
         Ok(_) => (),
@@ -119,11 +141,11 @@ fn shutdown_client(mut client: TlsStream<TcpStream>) {
 fn handle_request(request: &Request, tree: &UrlTree) -> Vec<u8> {
     let node = match search_in_tree(tree, &request.domain, &request.path) {
         Ok(val) => val,
-        Err(err) => return get_err_response(err, tree.settings.serve_errors)
+        Err(err) => return get_err_response(err, tree.settings.serve_errors, tree.settings.log)
     };
     let (body, mime) = match get_resource(node, &request.query) {
         Ok(val) => val,
-        Err(err) => return get_err_response(err, tree.settings.serve_errors)
+        Err(err) => return get_err_response(err, tree.settings.serve_errors, tree.settings.log)
     };
 
     // Create meta field
@@ -173,10 +195,13 @@ fn search_in_tree<'a>(tree: &'a UrlTree, domain: &str, path: &str) -> Result<&'a
     not_found_err
 }
 
-fn get_err_response(err: ServerError, serve_errors: bool) -> Vec<u8> {
+fn get_err_response(err: ServerError, serve_errors: bool, log: bool) -> Vec<u8> {
     let ServerError { message, status_code, is_meta } = err;
 
-    println!("{}", message);
+    if log && !is_meta {
+        let err_msg = message.clone();
+        thread::spawn(move || crate::log(&err_msg)); // Logging could be time consuming
+    }
 
     let response;
     if serve_errors || is_meta {
@@ -288,7 +313,7 @@ fn load_dynamic_content(dynamic_object: &DynamicObject, query: &Option<String>) 
     // Get the path
     let temp_file_path = match env::current_dir() {
         Ok(mut val) => {
-            val.push("temp");
+            val.push(TEMP_DIR);
             val.push(temp_file_num.to_string());
             val
         },
@@ -345,7 +370,7 @@ fn load_dynamic_content(dynamic_object: &DynamicObject, query: &Option<String>) 
     // Start process
     let mut process = match process.spawn() {
         Ok(val) => val,
-        Err(err) => { println!("here"); return cgi_error(&err) }
+        Err(err) => return cgi_error(&err)
     };
 
     // Poll process for completion, exit if time over
@@ -409,7 +434,29 @@ fn get_unique_file_list() -> Result<MutexGuard<'static, HashMap<u64, Instant>>> 
     cgi_error()
 }
 
-//TODO
-fn log(message: &str) {
-    println!("{}", message);
+fn clear_unique_file_list() -> std::result::Result<(), Box<dyn Error>> {
+    let mut file_map = get_unique_file_list()?;
+    let file_ids: Vec<u64> = file_map.iter().map(|val| *val.0).collect();
+
+    for file_id in file_ids {
+        let file_name = format!("{}/{}", TEMP_DIR, file_id);
+
+        // If file does not exist just remove entry
+        if !std::path::Path::new(&file_name).exists() {
+            file_map.remove(&file_id);
+            continue;
+        }
+
+        match fs::remove_file(&file_name) {
+            Ok(_) => (),
+            Err(_) => continue
+        }
+
+        // Check again if file exists before removing, b/c even with no error, file is not immeadiately deleted
+        if !std::path::Path::new(&file_name).exists() {
+            file_map.remove(&file_id);
+        }
+    }
+
+    Ok(())
 }

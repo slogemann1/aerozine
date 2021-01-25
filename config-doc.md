@@ -36,6 +36,9 @@ must be named "server_settings.json". The format is as follows:
     // Determines whether or not error messages will be sent with responses to failed requests,
     // defaults to false
     "serve_errors": false,
+    // Write error messages and warnings to log file, "log.txt", in the working directory of the
+    // server. With this enabled, all request / response errors will be logged, defaults to true
+    "log": true
     // The language of the files served by the server, defaults to null
     "default_lang": "en",
     // The text encoding of the files served by the server, defaults to "utf-8"
@@ -176,6 +179,5 @@ content or other links. The format is as follows:
 ## TODOs
     - Generate link page
     - Add caching mechanism for dynamically generated content
-    - Add logging options
     - Add redirect options
     - Add support for certificates

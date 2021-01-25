@@ -4,6 +4,7 @@ use std::io::Read;
 use std::fs::{ self, OpenOptions };
 use std::collections::HashMap;
 use serde_json;
+use crate::log;
 pub use structs::*;
 
 mod structs;
@@ -27,7 +28,7 @@ pub fn get_url_tree() -> UrlTree {
                     panic!("Error: There are two config files on the level \"{}\"", all_config[i].path.original);
                 }
                 else {
-                    println!("Warning: There are two config files on the level \"{}\". Only the first one will be used", all_config[i].path.original);
+                    log(&format!("Warning: There are two config files on the level \"{}\". Only the first one will be used", all_config[i].path.original));
                     all_config.remove(j);
                     j -= 1;
                 }
@@ -374,7 +375,7 @@ fn find_all_files(dir_path: &str, never_exit: bool) -> Vec<String> {
         Ok(val) => val,
         Err(_) => {
             if never_exit {
-                println!("Warning: the directory {} could not be read", dir_path);
+                log(&format!("Warning: the directory {} could not be read", dir_path));
                 return all_files;
             }
             else {
@@ -388,7 +389,7 @@ fn find_all_files(dir_path: &str, never_exit: bool) -> Vec<String> {
             Ok(val) => val,
             Err(_) => {
                 if never_exit {
-                    println!("Warning: the directory {} could not be read", dir_path);
+                    log(&format!("Warning: the directory {} could not be read", dir_path));
                     return all_files;
                 }
                 else {
@@ -401,7 +402,7 @@ fn find_all_files(dir_path: &str, never_exit: bool) -> Vec<String> {
             Ok(val) => val.is_dir(),
             Err(_) => {
                 if never_exit {
-                    println!("Warning: the directory {} could not be read", dir_path);
+                    log(&format!("Warning: the directory {} could not be read", dir_path));
                     return all_files;
                 }
                 else {
