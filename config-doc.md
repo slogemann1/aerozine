@@ -46,12 +46,6 @@ must be named "server_settings.json". The format is as follows:
     // The url path relative to the root the server uses when recieving traffic at the root
     // (e.g. user requests "gemini://www.example.com"), defaults to null
     "homepage": "index.gmi",
-    // This determines wether a file should be generated which links to every sub-file in the
-    // url tree, defaults to true
-    "gen_doc_page": true,
-    // The url path relative to the root at which the prior documentation page, if enabled,
-    // can be found, defaults to links.gmi
-    "doc_page_path": "links.gmi",
     // These determine on with which ip protocols the server will serve documents.
     // "ipv4" defaults to true and "ipv6" to false. If none are set, the server will
     // unconditionally terminate
@@ -64,9 +58,9 @@ must be named "server_settings.json". The format is as follows:
 The never_exit flag in settings should primarily be used when debugging your settings. Its
 intended purpose is to display warnings instead of quitting in order to quickly find all problems.
 If enabled, this flag causes the following error cases to be shown as warnings:
-    - Two config files were found in the same directory (The first one is used)
-    - Directories could not be found / opened while finding files (These are skipped)
-    - Files can not be read into memory (These are skipped and with every request for their data this is retried)
+- Two config files were found in the same directory (The first one is used)
+- Directories could not be found / opened while finding files (These are skipped)
+- Files can not be read into memory (These are skipped and with every request for their data this is retried)
 
 ## Config Files
 These files are used to describe the specific configuration of the files in
@@ -177,7 +171,6 @@ content or other links. The format is as follows:
 ```
 
 ## TODOs
-    - Generate link page
-    - Add caching mechanism for dynamically generated content
-    - Add redirect options
-    - Add support for certificates
+- Add caching mechanism for dynamically generated content
+- Add redirect options
+- Add support for certificates

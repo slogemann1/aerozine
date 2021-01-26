@@ -139,6 +139,14 @@ fn shutdown_client(mut client: TlsStream<TcpStream>) {
 }
 
 fn handle_request(request: &Request, tree: &UrlTree) -> Vec<u8> {
+    // If path points to root, switch with homepage
+    let mut request = request.clone();
+    if request.path.trim() == "" && tree.settings.homepage.is_some() {
+        let path = tree.settings.homepage.as_ref().unwrap();
+        request.path = path.clone();
+    }
+
+    // Search for node and get data
     let node = match search_in_tree(tree, &request.domain, &request.path) {
         Ok(val) => val,
         Err(err) => return get_err_response(err, tree.settings.serve_errors, tree.settings.log)

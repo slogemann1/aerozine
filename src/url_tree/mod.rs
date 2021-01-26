@@ -1,5 +1,3 @@
-//TODO: generation of links page (later), other pages from settings
-
 use std::io::Read;
 use std::fs::{ self, OpenOptions };
 use std::collections::HashMap;
@@ -427,16 +425,71 @@ fn find_all_files(dir_path: &str, never_exit: bool) -> Vec<String> {
     }).collect()
 }
 
-//TODO: add more mime types
 fn get_mime_type(path: &Path) -> String {
     let file_name = path.last();
     let name_parts: Vec<&str> = file_name.split(".").collect(); // Path must at least contain 1 element
     let ext = name_parts[name_parts.len() - 1];
 
     let mime = match ext {
-        "gmi" => "text/gemini",
+        "gmi" | "gemini" => "text/gemini",
         "txt" => "text/plain",
-        "html" => "text/html",
+        "html" | "htm" => "text/html",
+        "aac" => "audio/aac",
+        "azw" => "application/vnd.amazon.ebook",
+        "bin" => "application/octet-stream",
+        "bmp" => "image/bmp",
+        "css" => "text/css",
+        "csv" => "text/csv",
+        "doc" => "application/msword",
+        "docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "eot" => "application/vnd.ms-fontobject",
+        "epub" => "application/epub+zip",
+        "gz" => "application/gzip",
+        "gif" => "image/gif",
+        "ico" => "image/vnd.microsoft.icon",
+        "ics" => "text/calendar",
+        "jar" => "application/java-archive",
+        "jpeg" | "jpg" => "image/jpeg",
+        "js" | "mjs" => "text/javascript",
+        "json" => "application/json",
+        "jsonld" => "application/ld+json",
+        "mid" | "midi" => "audio/midi",
+        "mp3" => "audio/mpeg",
+        "mpeg" => "video/mpeg",
+        "mpkg" => "application/vnd.apple.installer+xml",
+        "odp" => "application/vnd.oasis.opendocument.presentation",
+        "ods" => "application/vnd.oasis.opendocument.spreadsheet",
+        "odt" => "application/vnd.oasis.opendocument.text",
+        "oga" => "audio/ogg",
+        "ogv" => "video/ogg",
+        "ogx" => "application/ogg",
+        "opus" => "audio/opus",
+        "otf" => "font/otf",
+        "png" => "image/png",
+        "pdf" => "application/pdf",
+        "ppt" => "application/vnd.ms-powerpoint",
+        "pptx" => "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "rar" => "application/vnd.rar",
+        "rtf" => "application/rtf",
+        "svg" => "image/svg+xml",
+        "tif" | "tiff" => "image/tiff",
+        "ts" => "video/mp2t",
+        "ttf" => "font/ttf",
+        "vsd" => "application/vnd.visio",
+        "wav" => "audio/wav",
+        "weba" => "audio/webm",
+        "webm" => "video/webm",
+        "webp" => "image/webp",
+        "woff" => "font/woff",
+        "woff2" => "font/woff2",
+        "xhtml" => "application/xhtml+xml",
+        "xls" => "application/vnd.ms-excel",
+        "xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "xml" => "text/xml",
+        "xul" => "application/vnd.mozilla.xul+xml",
+        "zip" => "application/zip",
+        "3gp" => "video/3gpp",
+        "3g2" => "video/3gpp2",
         _ => "text/plain"
     };
 

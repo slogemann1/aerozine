@@ -412,8 +412,6 @@ pub struct ServerSettings {
     pub default_lang: Option<String>,
     pub default_charset: String,
     pub homepage: Option<String>,
-    pub gen_doc_page: bool,
-    pub doc_page_path: String,
     pub ipv4: bool,
     pub ipv6: bool
 }
@@ -435,8 +433,6 @@ impl Default for ServerSettings {
             default_lang: None,
             default_charset: String::from("utf-8"),
             homepage: None,
-            gen_doc_page: true,
-            doc_page_path: String::from("links.gmi"),
             ipv4: true,
             ipv6: false
         }

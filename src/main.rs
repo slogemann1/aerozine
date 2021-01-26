@@ -1,4 +1,4 @@
-//TODO: add some unit tests, add text tree generation, add general documentation
+//TODO: add some unit tests, add text tree generation
 
 extern crate native_tls;
 extern crate serde;

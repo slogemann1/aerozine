@@ -111,7 +111,7 @@ pub fn parse_request(bytes: &[u8]) -> Result<Request> {
     if domain_and_path.len() != 2 {
         return Err(ServerError::new(
             format!(
-                "Error: Invalid pairing of parameters and values in request. Request: {}",
+                "Error: Invalid request. Request: {}",
                 &request_string
             ),
             StatusCode::BadRequest
