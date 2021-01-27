@@ -68,7 +68,7 @@ their individual directories and sub-directories. Any config file in a lower
 position within the file hierarchy will take precedence over the current one
 within its directory and sub-directories. These files can have any name, so
 long as they are specified within a higher config file or the server settings.
-**Note that it is not possible to have multipule configuration files in one
+**Note that it is not possible to have multiple configuration files in one
 directory as that could result in conflicting settings. Furthermore, these files
 will not be part of the url tree regardless of whether they have been whitelisted
 or not.** The format is as follows:
@@ -127,13 +127,12 @@ for the dynamic object is as follows:
     ],
     // This determines the query that should be requested at this url. The resulting
     // value will be passed on the command line in the following format: query="value".
-    // Note that all characters will be escaped as needed, defaults to null
-    "query": [
-        {
-            "display_text": "Enter your architecture", // The text prompt for retrieving the query
-            "private": false // Whether or not the query contains sensitive information
-        }
-    ],
+    // Note that all characters will be escaped as needed. **In addition to regular url
+    // escape codes, ' is escaped as %27 and " as %22**. This defaults to null.
+    "query": {
+        "display_text": "Enter your architecture", // The text prompt for retrieving the query
+        "private": false // Whether or not the query contains sensitive information
+    },
     // An optional parameter to set the mime-type of the content in the case that
     // it should not be able to be inferred (files without extensions). If it is
     // null, the type is inferred
@@ -150,7 +149,7 @@ For this example to work, the program must start cargo and then copy the data of
 into the file provided by the server
 
 ### Link Object
-This object specifies url links to other files. This can be used to either provide multipule
+This object specifies url links to other files. This can be used to either provide multiple
 distinct urls for a specific file or to show content under a different name than it is
 saved to disk as. Note that this can only link to acutal files and not dynamically generated
 content or other links. The format is as follows:

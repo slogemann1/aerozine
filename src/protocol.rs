@@ -106,6 +106,11 @@ pub fn parse_request(bytes: &[u8]) -> Result<Request> {
         url = parts.pop().unwrap().to_string();
     }
 
+    // Escape ' and " for command line
+    if let Some(val) = query {
+        query = Some(val.replace("'", "%27").replace("\"", "%22"));
+    }
+
     // Get domain and path from url
     let mut domain_and_path: Vec<&str> = url.splitn(2, "/").collect();
     if domain_and_path.len() != 2 {

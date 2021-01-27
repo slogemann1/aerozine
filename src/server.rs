@@ -316,7 +316,8 @@ fn load_dynamic_content(dynamic_object: &DynamicObject, query: &Option<String>) 
         file_map.insert(random_num, Instant::now());
         temp_file_num = random_num;
         break;
-    } 
+    }
+    drop(file_map); // Drop mutex guard so read_and_remove() can use it
 
     // Get the path
     let temp_file_path = match env::current_dir() {
@@ -346,7 +347,7 @@ fn load_dynamic_content(dynamic_object: &DynamicObject, query: &Option<String>) 
     // Add path name
     process.arg(
         format!(
-            "unique_file_path=\"{}\"",
+            "unique_file_path='{}'",
             temp_file_path
         )
     );
@@ -356,7 +357,7 @@ fn load_dynamic_content(dynamic_object: &DynamicObject, query: &Option<String>) 
         if let Some(query_value) = query {
             process.arg(
                 format!(
-                    "query=\"{}\"",
+                    "query='{}'",
                     query_value
                 )
             );
@@ -397,28 +398,30 @@ fn load_dynamic_content(dynamic_object: &DynamicObject, query: &Option<String>) 
     cgi_error(&"")
 }
 
-fn read_and_remove(file_name: &str, unique_num: u64) -> Result<Vec<u8>> {
+fn read_and_remove(file_path: &str, unique_num: u64) -> Result<Vec<u8>> {
     let cgi_error = |err: &dyn Display| Err(ServerError::new(
         format!("Error: Failed to read generated content. {}", err),
         StatusCode::CGIError
     ));
 
-    if !std::path::Path::new(file_name).exists() { // This entry will later be removed automatically
+    if !std::path::Path::new(file_path).exists() { // This entry will later be removed automatically
         return cgi_error(&"No content was generated");
     }
 
     // Get the data
-    let data = match fs::read(file_name) {
+    let data = match fs::read(file_path) {
         Ok(val) => val,
         Err(err) => return cgi_error(&err)
     };
 
-    // Remove the entry
-    let mut file_map = match get_unique_file_list() {
-        Ok(val) => val,
-        Err(_) => return Ok(data)
-    };
-    file_map.remove(&unique_num);
+    // Remove the file and the entry
+    if let Ok(_) = fs::remove_file(file_path) {
+        let mut file_map = match get_unique_file_list() {
+            Ok(val) => val,
+            Err(_) => return Ok(data)
+        };
+        file_map.remove(&unique_num);   
+    }
 
     Ok(data)
 }
@@ -430,7 +433,7 @@ fn get_unique_file_list() -> Result<MutexGuard<'static, HashMap<u64, Instant>>> 
     ));
 
     for _ in 0..10 {
-        match UNIQUE_FILE_LIST.lock() {
+        match UNIQUE_FILE_LIST.try_lock() { // Try lock so that it will not wait to respond to cgi requests
             Ok(val) => return Ok(val),
             Err(_) => ()
         };

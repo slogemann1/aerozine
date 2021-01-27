@@ -8,7 +8,7 @@ specified under the respective [documentation](https://github.com/slogemann1/gem
 - Serve any static file
 - Serve static files under a different name
 - Dynamically generated content
-- Serve on multipule domains
+- Serve on multiple domains
 - Extensive configuration options
 - Error logging
 
@@ -63,7 +63,7 @@ openssl req -x509 -sha256 -nodes -days 365 -newkey rsa:4096 -keyout private.key 
 openssl pkcs12 -export -out profile.pfx -inkey private.key -in certificate.crt
 ```
 With the first command, you will be prompted to enter various values which should be provided, making sure
-to enter the domain name under 'Common Name'. For multipule domains, you must create an SAN certificate. The
+to enter the domain name under 'Common Name'. For multiple domains, you must create an SAN certificate. The
 second command will prompt you to enter a password for the pfx file, which should later be given in in the
 'profile_password' field of the server settings.
 \
