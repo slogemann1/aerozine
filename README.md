@@ -1,10 +1,8 @@
 # About
 This project is a server written in rust which serves resources using the gemini protocol. Gemini
 is relatively new protcol similar to some extent to gopher and acts as a secure way to transfer mainly 
-textual data. Documentation and more information can be found at the http version of the [site](https://
-gemini.circumlunar.space/). This server is managed by various configuration files in json format as 
-specified under the respective [documentation](https://github.com/slogemann1/gemini-server/blob/master/
-config-doc.md).
+textual data. Documentation and more information can be found at the http version of the [site](https://gemini.circumlunar.space/). This server is managed by various configuration files in json format as 
+specified under the respective [documentation](https://github.com/slogemann1/gemini-server/blob/master/config-doc.md).
 
 # Features
 - Serve any static file
@@ -55,8 +53,7 @@ server_dir
 ```
 Generally, the directory can have any files inside it so long as a 'server_settings.json' file and
 a root directory (any name is possible for this) are present. For more information on the configuration 
-files that are needed and used here, see the [documentation](https://github.com/slogemann1/gemini-server/
-blob/master/config-doc.md).
+files that are needed and used here, see the [documentation](https://github.com/slogemann1/gemini-server/blob/master/config-doc.md).
 \
 Once this directory is set up, you will still need a certificate profile to run the server. This is
 stored in pfx format and can be created, if no certificate has yet been generated, with the help of openssl:
