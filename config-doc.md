@@ -169,8 +169,3 @@ content or other links. The format is as follows:
     "mime_type": "text/plain"
 }
 ```
-
-## TODOs
-- Add caching mechanism for dynamically generated content
-- Add redirect options
-- Add support for certificates

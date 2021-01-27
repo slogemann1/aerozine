@@ -452,7 +452,7 @@ pub struct Config {
     #[serde(default = "Vec::new")]
     pub link: Vec<LinkObject>,
     #[serde(default = "Vec::new")]
-    pub config_files: Vec<String>,
+    pub config_files: Vec<String>
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -1,10 +1,11 @@
-//TODO: add some unit tests, add text tree generation
+//TODO: add some unit tests
 
 extern crate native_tls;
 extern crate serde;
 extern crate serde_json;
 extern crate rand;
 extern crate chrono;
+extern crate clap;
 #[macro_use]
 extern crate lazy_static;
 
@@ -13,17 +14,21 @@ use std::error::Error;
 use std::fs::{ self, OpenOptions };
 use std::io::Write;
 use chrono::offset::Local;
-
 use protocol::StatusCode;
 
 mod server;
 mod url_tree;
 mod protocol;
+mod cli;
 
 const TEMP_DIR: &str = "temp";
 const LOG_FILE: &str = "log.txt";
 
 fn main() {
+    cli::run_app();
+}
+
+pub fn start_server() {
     let tree = url_tree::get_url_tree();
     reset_temp(tree.settings.never_exit);
     server::run_server(tree);
@@ -94,7 +99,6 @@ fn reset_temp(never_exit: bool) {
     }
 }
 
-//TODO
 fn log(message: &str) {
     let time = Local::now();
     let time_formatted = time.format("%Y.%m.%d %H:%M:%S");
