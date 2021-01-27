@@ -1,10 +1,11 @@
 use std::default::Default;
 use std::fmt::{ Display, Formatter };
 use std::fs;
+use std::hash::Hash;
 use serde::{ Serialize, Deserialize };
 use crate::log;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash)]
 pub struct UrlNode {
     pub name: String,
     pub children: Vec<UrlNode>,
@@ -26,7 +27,7 @@ impl UrlTree {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash)]
 pub struct FileData {
     pub meta_data: FileType,
     pub binary_data: Option<Vec<u8>>
@@ -66,7 +67,7 @@ impl FileData {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash)]
 pub enum FileType {
     Dynamic(DynamicObject),
     Link(LinkObject),
@@ -83,7 +84,7 @@ impl FileType {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash)]
 pub struct NormalFile {
     pub domain: String,
     pub path: Path,
@@ -322,13 +323,13 @@ impl Display for UrlNode {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash)]
 pub struct Path {
     pub original: String,
     pub components: Vec<String>
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash)]
 pub struct ConfigWithPath {
     pub path: Path,
     pub config: Config
@@ -397,7 +398,7 @@ impl Path {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
 #[serde(default)]
 pub struct ServerSettings {
     pub domain: String,
@@ -406,6 +407,7 @@ pub struct ServerSettings {
     pub profile_password: String,
     pub config_files: Vec<String>,
     pub max_dynamic_gen_time: u64,
+    pub cache_time: u64,
     pub never_exit: bool,
     pub serve_errors: bool,
     pub log: bool,
@@ -427,6 +429,7 @@ impl Default for ServerSettings {
                 String::from("config.json")
             ],
             max_dynamic_gen_time: 10,
+            cache_time: 300,
             never_exit: false,
             serve_errors: false,
             log: true,
@@ -439,7 +442,7 @@ impl Default for ServerSettings {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
 pub struct Config {
     pub domain: Option<String>,
     #[serde(default = "Vec::new")]
@@ -455,7 +458,7 @@ pub struct Config {
     pub config_files: Vec<String>
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
 pub struct DynamicObject {
     pub link_path: String, // Relative
     pub program_path: String, // Absolute
@@ -465,12 +468,13 @@ pub struct DynamicObject {
     pub cmd_env: Vec<EnvironmentValue>,
     #[serde(default = "return_none")]
     pub query: Option<Query>,
+    pub cache: bool,
     pub mime_type: Option<String>,
     pub gen_time: Option<u64>,
     pub domain: Option<String>
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
 pub struct LinkObject {
     pub domain: Option<String>,
     pub file_path: String,
@@ -478,13 +482,13 @@ pub struct LinkObject {
     pub mime_type: Option<String>
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
 pub struct EnvironmentValue {
     pub key: String,
     pub value: String
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
 pub struct Query {
     pub display_text: String,
     pub private: bool

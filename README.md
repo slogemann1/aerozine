@@ -8,6 +8,7 @@ specified under the respective [documentation](https://github.com/slogemann1/gem
 - Serve any static file
 - Serve static files under a different name
 - Dynamically generated content
+- Cache dynamically generated content
 - Serve on multiple domains
 - Extensive configuration options
 - Error logging
@@ -15,7 +16,6 @@ specified under the respective [documentation](https://github.com/slogemann1/gem
 # What is not currently supported
 - Client certificates
 - More precise status codes (no redirects)
-- Caching of dynamic content
 
 # How to build
 Currently the only way to use the server is by building it from source and then copying the executable.

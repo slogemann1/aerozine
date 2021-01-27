@@ -24,6 +24,10 @@ mod cli;
 const TEMP_DIR: &str = "temp";
 const LOG_FILE: &str = "log.txt";
 
+lazy_static! {
+    static ref CACHE_DIR: String = format!("{}/cache", TEMP_DIR);
+}
+
 fn main() {
     cli::run_app();
 }
@@ -94,6 +98,18 @@ fn reset_temp(never_exit: bool) {
             }
             else {
                 panic!("Error: The temp directory could not be created. {}", err)
+            }
+        }
+    }
+
+    match fs::create_dir(&*CACHE_DIR) {
+        Ok(_) => (),
+        Err(err) => {
+            if never_exit {
+                log(&format!("Warning: The cache directory could not be created. {}", err));
+            }
+            else {
+                panic!("Error: The cache directory could not be created. {}", err)
             }
         }
     }

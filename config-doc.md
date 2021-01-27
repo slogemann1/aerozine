@@ -29,6 +29,9 @@ must be named "server_settings.json". The format is as follows:
     // generate a webpage before it is stopped, defaults to 10. This can be changed
     // for specific cases as well (see Dynamic Object section)
     "max_dynamic_gen_time": 10,
+    // The time (in seconds) in between caching data from dynamically generated content if
+    // enabled in the respective dynamic object configuration, defaults to 300
+    "cache_time": 300
     // This determines whether the program will panic on encountering errors while
     // loading the url tree, defaults to false. Further information can be
     // found under the Never Exit section below
@@ -61,6 +64,8 @@ If enabled, this flag causes the following error cases to be shown as warnings:
 - Two config files were found in the same directory (The first one is used)
 - Directories could not be found / opened while finding files (These are skipped)
 - Files can not be read into memory (These are skipped and with every request for their data this is retried)
+- Temp / cache directory could not be deleted / created (The files either remain or are not created)
+- Dynamic object has both cache enabled and accepts a query (The query is discarded)
 
 ## Config Files
 These files are used to describe the specific configuration of the files in
@@ -128,14 +133,19 @@ for the dynamic object is as follows:
     // This determines the query that should be requested at this url. The resulting
     // value will be passed on the command line in the following format: query="value".
     // Note that all characters will be escaped as needed. **In addition to regular url
-    // escape codes, ' is escaped as %27 and " as %22**. This defaults to null.
+    // escape codes, ' is escaped as %27 and " as %22**. This defaults to null
     "query": {
         "display_text": "Enter your architecture", // The text prompt for retrieving the query
         "private": false // Whether or not the query contains sensitive information
     },
+    // This determines whether or not the program will cache the output of the program
+    // instead of re-running it on each request. The time between each cache is determined
+    // in the server settings
+    "cache": true
     // An optional parameter to set the mime-type of the content in the case that
     // it should not be able to be inferred (files without extensions). If it is
-    // null, the type is inferred
+    // null, the type is inferred. **Note that queries are not passed when caching files,
+    // so queries will be ignored even if they are enabled for this dynamic object**
     "mime_type": "application/vnd.microsoft.portable-executable",
     // This defines the amount of time allowed for a program to run before being shut down.
     // If this is null, the default time set in the server settings is used

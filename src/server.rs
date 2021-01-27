@@ -3,12 +3,13 @@ use std::sync::{ Arc, Mutex, MutexGuard };
 use std::fs::{ self, File };
 use std::io::{ Read, Write };
 use std::thread;
-use std::collections::HashMap;
+use std::collections::{ HashMap, hash_map::DefaultHasher };
 use std::process::Command;
 use std::fmt::Display;
 use std::time::{ Instant, Duration };
 use std::env;
 use std::error::Error;
+use std::hash::{ Hash, Hasher };
 use native_tls::{ Identity, TlsAcceptor, TlsStream };
 use rand;
 use crate::{ log, Result, ServerError };
@@ -21,6 +22,7 @@ const FILE_MAP_DEL_TIME: u64 = 300; // How often the file id removal thread shou
 
 lazy_static! {
     static ref UNIQUE_FILE_LIST: Mutex<HashMap<u64, Instant>> = Mutex::new(HashMap::new());
+    static ref CACHE_DIR: &'static String = &*crate::CACHE_DIR;
 }
 
 pub fn run_server(tree: UrlTree) {
@@ -54,6 +56,16 @@ pub fn run_server(tree: UrlTree) {
         loop {
             thread::sleep(Duration::from_secs(FILE_MAP_DEL_TIME));
             clear_unique_file_list().and_then(|_| Ok(())).unwrap(); // Stupid stuff to silence warning
+        }
+    });
+
+    // Spawn thread for caching dynamic content
+    let tree_copy = tree.clone();
+    let cache_time = tree.settings.cache_time;
+    thread::spawn(move || {
+        loop {
+            cache_files(&tree_copy);
+            thread::sleep(Duration::from_secs(cache_time));
         }
     });
 
@@ -292,6 +304,10 @@ fn load_data(file_type: &FileType, query: &Option<String>) -> Result<Vec<u8>> {
         }
     }
     else if let FileType::Dynamic(val) = file_type {
+        if val.cache {
+            return get_cached_data(val);
+        }
+
         return load_dynamic_content(val, query);
     }
     
@@ -426,6 +442,14 @@ fn read_and_remove(file_path: &str, unique_num: u64) -> Result<Vec<u8>> {
     Ok(data)
 }
 
+fn get_cached_data(dynamic_object: &DynamicObject) -> Result<Vec<u8>> {
+    let file_path = format!("{}/{}", &*CACHE_DIR, get_hash(dynamic_object));
+    match fs::read(file_path) {
+        Ok(val) => Ok(val),
+        Err(_) => load_dynamic_content(dynamic_object, &None)
+    }
+}
+
 fn get_unique_file_list() -> Result<MutexGuard<'static, HashMap<u64, Instant>>> {
     let cgi_error = || Err(ServerError::new(
         String::from("Error: Too many clients at once"),
@@ -470,4 +494,57 @@ fn clear_unique_file_list() -> std::result::Result<(), Box<dyn Error>> {
     }
 
     Ok(())
+}
+
+fn cache_files(tree: &UrlTree) {
+    let mut all_nodes = Vec::new();
+
+    // Get all files that need to be cached
+    for root in &tree.roots {
+        let mut nodes = get_dynamic_objects_cacheable(root);
+        all_nodes.append(&mut nodes);
+    }
+
+    for node in all_nodes {
+        if let FileType::Dynamic(dyn_obj) = &node.data.as_ref().unwrap().meta_data { // The data is always dynamic object
+            let data = match load_dynamic_content(dyn_obj, &None) {
+                Ok(val) => val,
+                Err(err) => {
+                    log(&format!("Error: Failed to cache file. {}", err));
+                    continue;
+                }
+            };
+
+            // File pathes are hashes to uniquely identify
+            let file_path = format!("{}/{}", &*CACHE_DIR, get_hash(dyn_obj));
+
+            fs::write(file_path, data).and_then(|_| Ok(())).unwrap();
+        }
+    }
+}
+
+fn get_dynamic_objects_cacheable<'a>(node: &'a UrlNode) -> Vec<&'a UrlNode> {
+    let mut node_list = Vec::new();
+
+    for child in &node.children {
+        if child.children.len() != 0 {
+            let mut nodes = get_dynamic_objects_cacheable(child);
+            node_list.append(&mut nodes);
+        }
+        else if let Some(file_data) = &child.data {
+            if let FileType::Dynamic(dyn_obj) = &file_data.meta_data {
+                if dyn_obj.cache {
+                    node_list.push(child);
+                }
+            }
+        }
+    }
+
+    node_list
+}
+
+fn get_hash<T: Hash>(val: &T) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    val.hash(&mut hasher);
+    hasher.finish()
 }

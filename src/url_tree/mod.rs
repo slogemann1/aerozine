@@ -325,6 +325,18 @@ fn create_tree(config_list: &Vec<ConfigWithPath>, root_node: &mut UrlNode, setti
                 link_path = Path::from_parent(&config_dir_path, &Path::from_str(&dynamic_obj.link_path));
             }
 
+            // Check whether or not queries are enabled if cache is enabled
+            if dynamic_obj.cache && dynamic_obj.query.is_some() {
+                if settings.never_exit {
+                    log(&format!(
+                        "Warning: A dynamic object in the {} config file has both cache enabled and has a query", &real_config_dir_path.original
+                    ));
+                }
+                else {
+                    panic!("Error: A dynamic object in the {} config file has both cache enabled and has a query", &real_config_dir_path.original);
+                }
+            }
+
             // Add path
             root_node.add_file_path(
                 &link_path,
