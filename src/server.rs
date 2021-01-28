@@ -291,7 +291,7 @@ fn load_data(file_type: &FileType, query: &Option<String>) -> Result<Vec<u8>> {
         StatusCode::TemporaryFailure
     ));
     
-    if let FileType::Normal(val) = file_type { 
+    if let FileType::Normal(val) = file_type {
         match fs::read(&val.path.original) {
             Ok(val) => return Ok(val),
             Err(err) => return internal_error(&err)

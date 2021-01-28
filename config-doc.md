@@ -31,7 +31,10 @@ must be named "server_settings.json". The format is as follows:
     "max_dynamic_gen_time": 10,
     // The time (in seconds) in between caching data from dynamically generated content if
     // enabled in the respective dynamic object configuration, defaults to 300
-    "cache_time": 300
+    "cache_time": 300,
+    // Determines whether or not files will be loaded into memory before running or loaded while
+    // running. If not set in a lower config file, this value will be assumed, defaults to true
+    "default_preload": true,
     // This determines whether the program will panic on encountering errors while
     // loading the url tree, defaults to false. Further information can be
     // found under the Never Exit section below
@@ -90,6 +93,9 @@ or not.** The format is as follows:
     // Determines whether to recursively include all sub-files from the parent directory of the config
     // file. This behaviour is of course overridden by higher precedence (lower directory) config files
     "default_whitelist": false,
+    // Determines whether or not files under the control of this config file will be preloaded before 
+    // starting the server or not. If this value is null, the default set in the server settings is used
+    "default_preload": null,
     // A list of objects specifing dynamically generated files. This is documented below under
     // the Dynamic Object section
     "dynamic": [],
@@ -175,6 +181,10 @@ content or other links. The format is as follows:
     "link_path": "well_though_out_name",
     // The mime-type of the content being served through this link. If this is null,
     // the mime type will be inferred from the link path
-    "mime_type": "text/plain"
+    "mime_type": "text/plain",
+    // Determines whether or not this file will be preloaded before running or if it
+    // will be loaded when requested. If this is null, the value of the config file will
+    // be used
+    "preload": false
 }
 ```

@@ -69,7 +69,38 @@ second command will prompt you to enter a password for the pfx file, which shoul
 \
 After this is complete, the server can be run either by typing 'gemini-server' or 'gemini-server start'
 
+# Notes
+Here is some further information about the server that could be of use to take into account.
+
+## On speed
+Since the server is written in rust it should in general be relatively fast when serving resources. All
+static files (including link paths) are loaded into memory before the server has started. While this could
+be a problem with low ram, the intended use does not expect large files, making this, at least for smaller
+servers, a relatively efficient means of serving these files. This is optional, however, with the use of 
+the "preload_default" and "preload" options in the configuration. As for dynamic content, however, this is 
+greatly dependant on the program generating it. It should be noted that the command objects (in rust) are 
+loaded with each (non-cached) request which could have some effect on performance. As for further 
+implementation details, it is quite possible that things are not implemented in an efficient manner, 
+although I have no more concrete examples.
+
+## On Security
+**Note that any concerns of security are entirely the responsibility of the user of this program**. That 
+being said, however, aspects of security were taken into consideration when creating this implementation.
+\
+Dynamically generated content is placed in temporary files whose paths are passed to the programs for 
+generation. These filesnames are entirely random, and it is checked, with the use of a hashmap, that
+no duplicate names will be created while in use. These file ids are only removed from the hashmap once
+their corresponding file has been deleted. Still, this is by no means a guarantee that this works.
+\
+Another, quite simple, precaution taken is the escaping of single and double quotes in queries. This is done
+to attempt to stop users from being able to insert command line arguments to a program. This, again, is
+not a guarantee of security.
+
+## Other
+If there are any questions or issues regarding the implementation or useage of this server, I can generally 
+be reached at <sllogemann1@gmail.com>. Furthermore, I would be very happy to hear of any projects that
+use this implementation.
+
 # TODOs
-- Add caching mechanism for dynamically generated content
 - Add redirect options
 - Add support for client certificates

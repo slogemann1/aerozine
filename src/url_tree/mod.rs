@@ -164,7 +164,7 @@ fn create_tree(config_list: &Vec<ConfigWithPath>, root_node: &mut UrlNode, setti
     let never_exit = settings.never_exit;
     let root_dir = settings.root.clone();
     let root_path = Path::from_str(&root_dir);
-    let root_depth = root_path.depth(); // For amount of values to skip
+    let root_depth = root_path.depth(); // For amount of path components to skip
 
     for config in config_list {
         // Paths
@@ -175,6 +175,12 @@ fn create_tree(config_list: &Vec<ConfigWithPath>, root_node: &mut UrlNode, setti
         let domain = match &config.config.domain {
             Some(val) => String::from(val),
             None => String::from(&settings.domain)
+        };
+
+        // Preload
+        let preload = match &config.config.default_preload {
+            Some(val) => *val,
+            None => settings.default_preload
         };
 
         // Handle whitelist / blacklist:
@@ -190,6 +196,7 @@ fn create_tree(config_list: &Vec<ConfigWithPath>, root_node: &mut UrlNode, setti
             root_node.remove_path(file_path);
         }
 
+        // default_whitelist = true
         if config.config.default_whitelist {
             for file_path in all_file_paths {
                 // Get path including root
@@ -205,7 +212,8 @@ fn create_tree(config_list: &Vec<ConfigWithPath>, root_node: &mut UrlNode, setti
                     &file_path,
                     FileData::from_file_type(
                         FileType::Normal(file_data),
-                        settings.never_exit
+                        settings.never_exit,
+                        preload
                     )
                 );
             }
@@ -225,6 +233,7 @@ fn create_tree(config_list: &Vec<ConfigWithPath>, root_node: &mut UrlNode, setti
                 root_node.remove_path(&file_path);
             }
         }
+        // default_whitelist = false
         else {
             // Add all whitelisted files
             for rel_path in &config.config.whitelist {
@@ -251,6 +260,7 @@ fn create_tree(config_list: &Vec<ConfigWithPath>, root_node: &mut UrlNode, setti
                     FileData::from_file_type(
                         FileType::Normal(file_data),
                         settings.never_exit,
+                        preload
                     )
                 );
             }
@@ -272,6 +282,12 @@ fn create_tree(config_list: &Vec<ConfigWithPath>, root_node: &mut UrlNode, setti
                 );
             }
 
+            // Possibly reset preload
+            let preload = match &link_obj.preload {
+                Some(val) => *val,
+                None => preload
+            };
+
             // Get link path with respect to root
             let (link_path, file_path);
             if config_dir_path.is_root() {
@@ -292,7 +308,8 @@ fn create_tree(config_list: &Vec<ConfigWithPath>, root_node: &mut UrlNode, setti
                 &link_path,
                 FileData::from_file_type(
                     FileType::Link(link_obj),
-                    settings.never_exit
+                    settings.never_exit,
+                    preload
                 )
             );
         }
@@ -342,7 +359,8 @@ fn create_tree(config_list: &Vec<ConfigWithPath>, root_node: &mut UrlNode, setti
                 &link_path,
                 FileData::from_file_type(
                     FileType::Dynamic(dynamic_obj),
-                    settings.never_exit
+                    settings.never_exit,
+                    false // This parameter does nothing here
                 )
             );
         }

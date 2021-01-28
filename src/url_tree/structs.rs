@@ -34,7 +34,7 @@ pub struct FileData {
 }
 
 impl FileData {
-    pub fn from_file_type(file_type: FileType, never_exit: bool) -> Self {
+    pub fn from_file_type(file_type: FileType, never_exit: bool, preload: bool) -> Self {
         let file_path = match &file_type {
             FileType::Dynamic(val) => return FileData {
                 meta_data: FileType::Dynamic(val.clone()),
@@ -44,25 +44,33 @@ impl FileData {
             FileType::Normal(val) => &val.path.original
         };
 
-        let binary_data = match fs::read(file_path) {
-            Ok(val) => val,
-            Err(err) => {
-                if never_exit {
-                    log(&format!("Warning: Could not read the file at {} to memory. {}", file_path, err));
-                    return FileData {
-                        meta_data: file_type,
-                        binary_data: None
+        if preload {
+            let binary_data = match fs::read(file_path) {
+                Ok(val) => val,
+                Err(err) => {
+                    if never_exit {
+                        log(&format!("Warning: Could not read the file at {} to memory. {}", file_path, err));
+                        return FileData {
+                            meta_data: file_type,
+                            binary_data: None
+                        }
+                    }
+                    else {
+                        panic!("Error: Could not read the file at {} to memory. {}", file_path, err);
                     }
                 }
-                else {
-                    panic!("Error: Could not read the file at {} to memory. {}", file_path, err);
-                }
-            }
-        };
+            };
 
-        FileData {
-            meta_data: file_type,
-            binary_data: Some(binary_data)
+            return FileData {
+                meta_data: file_type,
+                binary_data: Some(binary_data)
+            }
+        }
+        else {
+            return FileData {
+                meta_data: file_type,
+                binary_data: None
+            }
         }
     }
 }
@@ -408,6 +416,7 @@ pub struct ServerSettings {
     pub config_files: Vec<String>,
     pub max_dynamic_gen_time: u64,
     pub cache_time: u64,
+    pub default_preload: bool,
     pub never_exit: bool,
     pub serve_errors: bool,
     pub log: bool,
@@ -430,6 +439,7 @@ impl Default for ServerSettings {
             ],
             max_dynamic_gen_time: 10,
             cache_time: 300,
+            default_preload: true,
             never_exit: false,
             serve_errors: false,
             log: true,
@@ -455,7 +465,8 @@ pub struct Config {
     #[serde(default = "Vec::new")]
     pub link: Vec<LinkObject>,
     #[serde(default = "Vec::new")]
-    pub config_files: Vec<String>
+    pub config_files: Vec<String>,
+    pub default_preload: Option<bool>
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]
@@ -479,7 +490,8 @@ pub struct LinkObject {
     pub domain: Option<String>,
     pub file_path: String,
     pub link_path: String,
-    pub mime_type: Option<String>
+    pub mime_type: Option<String>,
+    pub preload: Option<bool>
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]

@@ -130,7 +130,8 @@ fn create_template(path: &str) {
         default_whitelist: false,
         dynamic: Vec::new(),
         link: Vec::new(),
-        config_files: Vec::new()
+        config_files: Vec::new(),
+        default_preload: None
     };
     let config_display = serde_json::to_string_pretty(&config)
     .expect("Failed to serialize");
