@@ -119,50 +119,50 @@ for the dynamic object is as follows:
 {
     // The url path for the content to be requested at, relative to the parent directory
     // of the current config file
-    "link_path": "download",
+    "link_path": "echo",
     // The path to the program to be executed. It is absolute, but also reads from
     // the environment path variable (e.g. both "/bin/sh" and "sh" are valid)
-    "program_path": "builder",
+    "program_path": "python3",
     // The arguments to be passed to the program. These will be passed before the temporary
     // file path and the query, defaults to []
-    "args": [],
+    "args": ["echo.py"],
     // The working directory for the program to be run in. This path should be absolute
-    "cmd_working_dir": "/home/pi/Desktop/gemini-server",
+    "cmd_working_dir": "/home/pi/Desktop/server/cgi",
     // A list of environment values and their keys which should determine the environment
     // of the program to run
     "cmd_env": [
         {
-            "key": "RUSTFLAGS",
-            "value": "-C target-feature=+crt-static"
+            "key": "LOG_QUERY", // Example key that the cgi program would handle
+            "value": "1"
         },
     ],
     // This determines the query that should be requested at this url. The resulting
     // value will be passed on the command line in the following format: query="value".
-    // Note that all characters will be escaped as needed. **In addition to regular url
-    // escape codes, ' is escaped as %27 and " as %22**. This defaults to null
+    // Note that all characters will be escaped as needed. *In addition to regular url
+    // escape codes, ' is escaped as %27 and " as %22*. This defaults to null
     "query": {
-        "display_text": "Enter your architecture", // The text prompt for retrieving the query
+        "display_text": "Enter a message", // The text prompt for retrieving the query
         "private": false // Whether or not the query contains sensitive information
     },
     // This determines whether or not the program will cache the output of the program
     // instead of re-running it on each request. The time between each cache is determined
     // in the server settings
-    "cache": true
-    // An optional parameter to set the mime-type of the content in the case that
-    // it should not be able to be inferred (files without extensions). If it is
-    // null, the type is inferred. **Note that queries are not passed when caching files,
-    // so queries will be ignored even if they are enabled for this dynamic object**
-    "mime_type": "application/vnd.microsoft.portable-executable",
+    "cache": false,
+    // A parameter to set the mime-type of the content. *Note that queries are not passed
+    // when caching files, so queries will be ignored even if they are enabled for this
+    // dynamic object*
+    "mime_type": "text/gemini",
     // This defines the amount of time allowed for a program to run before being shut down.
     // If this is null, the default time set in the server settings is used
-    "gen_time": 120,
+    "gen_time": 5,
     // The domain for this specific path. If this is null the domain of the config
     // file will be used
     "domain": null
 }
 ```
-For this example to work, the program must start cargo and then copy the data of the output file
-into the file provided by the server
+The idea behind this example is that the cgi python program will read in the command line arguments
+for query and file path and then output the query into the file before exiting. Deleting the temporary
+file is handled by the server.
 
 ### Link Object
 This object specifies url links to other files. This can be used to either provide multiple
