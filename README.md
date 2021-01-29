@@ -1,8 +1,8 @@
 # About
-This project is a server written in rust which serves resources using the gemini protocol. Gemini
+Aerozine is a server written in rust which serves resources using the gemini protocol. Gemini
 is relatively new protcol similar to some extent to gopher and acts as a secure way to transfer mainly 
-textual data. Documentation and more information can be found at the http version of the [site](https://gemini.circumlunar.space/). This server is managed by various configuration files in json format as 
-specified under the respective [documentation](https://github.com/slogemann1/gemini-server/blob/master/config-doc.md).
+textual data. Documentation and more information can be found at the http version of the [site](https://gemini.circumlunar.space/). The 
+server is managed by various configuration files in json format as specified under the respective [documentation](https://github.com/slogemann1/aerozine/blob/master/config-doc.md).
 
 # Features
 - Serve any static file
@@ -13,19 +13,20 @@ specified under the respective [documentation](https://github.com/slogemann1/gem
 - Extensive configuration options
 - Error logging
 
-# What is not currently supported
+# Upcoming features
+- More precise status codes through process return values
+- Option to pass values (query/temp file path) through environment variables
 - Client certificates
-- More precise status codes (no redirects)
 
 # How to build
 Currently the only way to use the server is by building it from source and then copying the executable.
 This can be done as follows, assuming git and cargo are installed:
 ```shell
-git clone 'https://github.com/slogemann1/gemini-server'
-cd gemini-server
+git clone https://github.com/slogemann1/aerozine
+cd aerozine
 cargo build --release
 ```
-After running these commands, the executable should be located at target/release/gemini-server (with a 
+After running these commands, the executable should be located at target/release/aerozine (with a 
 different extension depending on OS). This can then either be copied directly into the directory which
 has been created (see Setting Up below) or stored somwhere else, optionally within the system path, to be
 later executed in the proper directory.
@@ -35,7 +36,7 @@ Once the binary has been created by following the steps above, a directory can b
 program can execute. This can be done automatically by running the program with the 'init' subcommand 
 (assuming server is in the path):
 ```shell
-gemini-server init -p server
+aerozine init -p server
 cd server
 ```
 
@@ -53,7 +54,7 @@ server_dir
 ```
 Generally, the directory can have any files inside it so long as a 'server_settings.json' file and
 a root directory (any name is possible for this) are present. For more information on the configuration 
-files that are needed and used here, see the [documentation](https://github.com/slogemann1/gemini-server/blob/master/config-doc.md).
+files that are needed and used here, see the [documentation](https://github.com/slogemann1/aerozine/blob/master/config-doc.md).
 \
 Once this directory is set up, you will still need a certificate profile to run the server. This is
 stored in pfx format and can be created, if no certificate has yet been generated, with the help of openssl:
@@ -67,13 +68,13 @@ to enter the domain name under 'Common Name'. For multiple domains, you must cre
 second command will prompt you to enter a password for the pfx file, which should later be given in in the
 'profile_password' field of the server settings.
 \
-After this is complete, the server can be run either by typing 'gemini-server' or 'gemini-server start'
+After this is complete, the server can be run either by typing 'aerozine' or 'aerozine start'
 
 # Notes
 Here is some further information about the server that could be of use to take into account.
 
 ## On speed
-Since the server is written in rust it should in general be relatively fast when serving resources. All
+Since Aerozine is written in rust it should in general be relatively fast when serving resources. All
 static files (including link paths) are loaded into memory before the server has started. While this could
 be a problem with low ram, the intended use does not expect large files, making this, at least for smaller
 servers, a relatively efficient means of serving these files. This is optional, however, with the use of 
@@ -96,11 +97,11 @@ Another, quite simple, precaution taken is the escaping of single and double quo
 to attempt to stop users from being able to insert command line arguments to a program. This, again, is
 not a guarantee of security.
 
-## Other
-If there are any questions or issues regarding the implementation or useage of this server, I can generally 
-be reached at <sllogemann1@gmail.com>. Furthermore, I would be very happy to hear of any projects that
-use this implementation.
+## Name
+The name "Aerozine" is the same as the name of the fuel that powered the Titan II engines, which brought the
+gemini capsule into space. The idea being that you can launch your own gemini capsule on the internet using Aerozine.
 
-# TODOs
-- Add redirect options
-- Add support for client certificates
+## Contact
+If there are any questions or issues regarding the implementation or useage of this server, I can generally 
+be reached at <sllogemann1@gmail.com>. Furthermore, I would be very interested to hear of any projects that
+use Aerozine.
