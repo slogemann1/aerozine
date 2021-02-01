@@ -1,6 +1,6 @@
 //TODO: add some unit tests
 
-extern crate native_tls;
+extern crate openssl;
 extern crate serde;
 extern crate serde_json;
 extern crate rand;

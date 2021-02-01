@@ -10,7 +10,8 @@ use std::time::{ Instant, Duration };
 use std::env;
 use std::error::Error;
 use std::hash::{ Hash, Hasher };
-use native_tls::{ Identity, TlsAcceptor, TlsStream };
+use openssl::ssl::{ SslAcceptor, SslMethod, SslStream, SslVerifyMode };
+use openssl::pkcs12::Pkcs12;
 use rand;
 use crate::{ log, Result, ServerError };
 use crate::url_tree::{ UrlTree, UrlNode, Path, FileType, DynamicObject, FileData };
@@ -31,10 +32,11 @@ pub fn run_server(tree: UrlTree) {
     // Get certificate
     let cert_src = &tree.settings.tls_profile;
     let cert_passwd = &tree.settings.profile_password;
-    let mut cert_file = File::open(cert_src).expect("Critical Error: Failed to open certificate");
-    let mut certificate: Vec<u8> = vec![];
-    cert_file.read_to_end(&mut certificate).expect("Critical Error: Failed to read certifcate");
-    let identity = Identity::from_pkcs12(&certificate, cert_passwd).expect("Critical Error: Failed to create identity (bad certificate)");
+    let mut pfx_file = File::open(cert_src).expect("Critical Error: Failed to open certificate");
+    let mut pfx_data: Vec<u8> = vec![];
+    pfx_file.read_to_end(&mut pfx_data).expect("Critical Error: Failed to read certifcate");
+    let pkcs12 = Pkcs12::from_der(&pfx_data).expect("Critical Error: Failed to parse pfx file (bad certificate)");
+    let identity = pkcs12.parse(cert_passwd).expect("Critical Error: Failed to create identity (incorrect password)");
 
     // Create Tcp Listeners based on ipv4/6 settings
     let mut listeners: Vec<TcpListener> = Vec::new();
@@ -48,8 +50,12 @@ pub fn run_server(tree: UrlTree) {
     }
 
     // Create Tls wrapper for acceptors based on certificate
-    let acceptor = TlsAcceptor::new(identity.clone()).expect("Critical Error: Failed to initialize acceptor");
-    let acceptor = Arc::new(acceptor);
+    let cert_init_error = "Critical Error: Failed to initialize acceptor";
+    let mut acceptor = SslAcceptor::mozilla_intermediate(SslMethod::tls()).expect(cert_init_error);
+    acceptor.set_certificate(&identity.cert).expect(cert_init_error);
+    acceptor.set_private_key(&identity.pkey).expect(cert_init_error);
+    acceptor.set_verify_callback(SslVerifyMode::PEER, |_, _| true);
+    let acceptor = Arc::new(acceptor.build());
     
     // Spawn thread for removing unused file ids
     thread::spawn(|| {
@@ -93,7 +99,7 @@ pub fn run_server(tree: UrlTree) {
     }
 }
 
-fn handle_server(listener: TcpListener, acceptor: Arc<TlsAcceptor>, tree: Arc<UrlTree>)
+fn handle_server(listener: TcpListener, acceptor: Arc<SslAcceptor>, tree: Arc<UrlTree>)
 {
     for stream in listener.incoming() {
         match stream {
@@ -104,7 +110,7 @@ fn handle_server(listener: TcpListener, acceptor: Arc<TlsAcceptor>, tree: Arc<Ur
                 thread::spawn(move || {
                     let client = match acceptor.accept(client) {
                         Ok(val) => val,
-                        Err(_) => return
+                        Err(err) => { println!("{}", err); return }
                     };
                     handle_client(client, tree);
                 });
@@ -114,7 +120,7 @@ fn handle_server(listener: TcpListener, acceptor: Arc<TlsAcceptor>, tree: Arc<Ur
     }
 }
 
-fn handle_client(mut client: TlsStream<TcpStream>, tree: Arc<UrlTree>) {
+fn handle_client(mut client: SslStream<TcpStream>, tree: Arc<UrlTree>) {
     let mut buffer = [0; BUFFER_SIZE];
 
     // Read and parse request from client
@@ -143,7 +149,7 @@ fn handle_client(mut client: TlsStream<TcpStream>, tree: Arc<UrlTree>) {
     shutdown_client(client);
 }
 
-fn shutdown_client(mut client: TlsStream<TcpStream>) {
+fn shutdown_client(mut client: SslStream<TcpStream>) {
     match client.shutdown() {
         Ok(_) => (),
         Err(_) => ()

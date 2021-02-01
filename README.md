@@ -13,23 +13,16 @@ server is managed by various configuration files in json format as specified und
 - Extensive configuration options
 - Error logging
 
-# Upcoming features
+# Upcoming Features
 - More precise status codes through process return values
 - Option to pass values (query/temp file path) through environment variables
 - Client certificates
 
-# How to build
-Currently the only way to use the server is by building it from source and then copying the executable.
-This can be done as follows, assuming git and cargo are installed:
-```shell
-git clone https://github.com/slogemann1/aerozine
-cd aerozine
-cargo build --release
-```
-After running these commands, the executable should be located at target/release/aerozine (with a 
-different extension depending on OS). This can then either be copied directly into the directory which
-has been created (see Setting Up below) or stored somwhere else, optionally within the system path, to be
-later executed in the proper directory.
+# How to Install
+Aerozine can be installed either by downloading the latest release for your platform which is indicated by the name
+of the binary which has the format aerozine_operatingsystem_architecture\[.exe\]. If your platform is not included
+or you would rather build from source, instructions can be found [here](https://github.com/slogemann1/aerozine/blob/master/build-doc.md).
+After you have the executable, you can place it into your system path to use from the command line.
 
 # Setting Up
 Once the binary has been created by following the steps above, a directory can be created in which the
@@ -73,7 +66,7 @@ After this is complete, the server can be run either by typing 'aerozine' or 'ae
 # Notes
 Here is some further information about the server that could be of use to take into account.
 
-## On speed
+## On Speed
 Since Aerozine is written in rust it should in general be relatively fast when serving resources. All
 static files (including link paths) are loaded into memory before the server has started. While this could
 be a problem with low ram, the intended use does not expect large files, making this, at least for smaller
