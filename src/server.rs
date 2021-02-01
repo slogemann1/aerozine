@@ -110,7 +110,7 @@ fn handle_server(listener: TcpListener, acceptor: Arc<SslAcceptor>, tree: Arc<Ur
                 thread::spawn(move || {
                     let client = match acceptor.accept(client) {
                         Ok(val) => val,
-                        Err(err) => { println!("{}", err); return }
+                        Err(_) => return
                     };
                     handle_client(client, tree);
                 });
@@ -131,9 +131,34 @@ fn handle_client(mut client: SslStream<TcpStream>, tree: Arc<UrlTree>) {
             return;
         }
     };
+
+    if num_bytes > 1026 {
+        let err_msg = ServerError::new(
+            String::from("Error: Url size was larger than 1024"),
+            StatusCode::BadRequest
+        );
+
+        let serve_errors = tree.settings.serve_errors;
+        let log = tree.settings.log;
+        match client.write(&get_err_response(err_msg, serve_errors, log)) {
+            Ok(_) => (),
+            Err(_) => ()
+        };
+
+        shutdown_client(client);
+        return;
+    }
+
+    // Parse the request
     let request = match protocol::parse_request(&buffer[0..num_bytes]) {
         Ok(val) => val,
-        Err(_) => {
+        Err(err) => { // If bad request, return error status
+            let serve_errors = tree.settings.serve_errors;
+            let log = tree.settings.log;
+            match client.write(&get_err_response(err, serve_errors, log)) {
+                Ok(_) => (),
+                Err(_) => ()
+            };
             shutdown_client(client);
             return;
         }
@@ -175,17 +200,20 @@ fn handle_request(request: &Request, tree: &UrlTree) -> Vec<u8> {
     };
 
     // Create meta field
-    let meta;
+    let mut meta;
     if mime.starts_with("text") {
         if mime == "text/gemini" && tree.settings.default_lang.is_some() { 
             meta = format!(
-                "text/gemini; charset={}; lang={}",
-                &tree.settings.default_charset,
+                "text/gemini; lang={}",
                 &tree.settings.default_lang.as_ref().unwrap()
             );
         }
         else {
-            meta = format!("{}; {}", mime, &tree.settings.default_charset);
+            meta = mime.to_string();
+        }
+
+        if let Some(charset) = &tree.settings.default_charset {
+            meta += &format!("; charset={}", &charset);
         }
     }
     else {
@@ -218,7 +246,11 @@ fn search_in_tree<'a>(tree: &'a UrlTree, domain: &str, path: &str) -> Result<&'a
         }
     }
 
-    not_found_err
+    // If domain is not found, consider it a proxy request
+    Err(ServerError::new(
+        String::from("Error: This server does not handle proxy requests"),
+        StatusCode::ProxyRequestRefused
+    ))
 }
 
 fn get_err_response(err: ServerError, serve_errors: bool, log: bool) -> Vec<u8> {

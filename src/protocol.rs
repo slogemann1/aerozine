@@ -17,7 +17,7 @@ pub enum StatusCode {
     PermanentFailure, // Unimplemented
     NotFound,
     Gone, // Unimplemented (maybe in future)
-    ProxyRequestRefused, //TODO
+    ProxyRequestRefused,
     BadRequest,
     CertificateRequired, //TODO
     CertificateUnauthorized, //TODO
@@ -67,6 +67,7 @@ impl Response {
 
     pub fn build(&self) -> Vec<u8> {
         let mut header = self.status_code.to_u32().to_string();
+        header.push(' ');
         header.push_str(&self.meta);
         header.push_str("\r\n");
 
@@ -92,12 +93,39 @@ pub fn parse_request(bytes: &[u8]) -> Result<Request> {
         }
     };
 
-    let request_string = request_string.replace("gemini://", "").replace("\r\n", "");
+    // Check request header for gemini://
+    let request;
+    let len = request_string.len();
+    if request_string.starts_with("gemini://") && len > 9 {
+        if request_string.ends_with("\r\n") { // Check for trailing \r\n
+            request = request_string[9..(len - 2)].to_string();
+        }
+        else {
+            return Err(ServerError::new(
+                String::from("Error: Invalid request, \\r\\n was not present"),
+                StatusCode::BadRequest
+            ));
+        }
+
+    }
+    else if request_string.starts_with("http://") || request_string.starts_with("https://") // Check for attempted proxy request
+    || request_string.starts_with("gopher://") {
+        return Err(ServerError::new(
+            String::from("Error: This server does not handle proxy requests"),
+            StatusCode::ProxyRequestRefused
+        ));
+    }
+    else { // Otherwise bad request
+        return Err(ServerError::new(
+            String::from("Error: Bad header"),
+            StatusCode::BadRequest
+        ));
+    }
 
     // Seperate request into url and parameters
-    let url;
+    let mut url;
     let mut query: Option<String> = None;
-    let mut parts: Vec<&str> = request_string.splitn(2, "?").collect();
+    let mut parts: Vec<&str> = request.splitn(2, "?").collect();
     if parts.len() == 1 {
         url = parts.pop().unwrap().to_string();
     }
@@ -111,6 +139,11 @@ pub fn parse_request(bytes: &[u8]) -> Result<Request> {
         query = Some(val.replace("'", "%27").replace("\"", "%22"));
     }
 
+    // Pad url with extra slash
+    if !url.ends_with('/') {
+        url.push('/');
+    }
+
     // Get domain and path from url
     let mut domain_and_path: Vec<&str> = url.splitn(2, "/").collect();
     if domain_and_path.len() != 2 {
@@ -122,8 +155,14 @@ pub fn parse_request(bytes: &[u8]) -> Result<Request> {
             StatusCode::BadRequest
         ));
     }
+
     let path = domain_and_path.pop().unwrap().to_string();
-    let domain = domain_and_path.pop().unwrap().to_string();
+    let mut domain = domain_and_path.pop().unwrap().to_string();
+
+    // Handle requests with explicit port
+    if domain.ends_with(":1965") {
+        domain = domain[0..(domain.len() - 5)].to_string();
+    }
 
     Ok(
         Request {

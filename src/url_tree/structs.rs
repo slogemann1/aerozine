@@ -349,6 +349,7 @@ impl Path {
         let components: Vec<String> = all_forward
             .split("/")
             .map(|val| String::from(val))
+            .filter(|val| val.trim() != "") // Remove empty path entries
             .collect();
 
         Path {
@@ -421,7 +422,7 @@ pub struct ServerSettings {
     pub serve_errors: bool,
     pub log: bool,
     pub default_lang: Option<String>,
-    pub default_charset: String,
+    pub default_charset: Option<String>,
     pub homepage: Option<String>,
     pub ipv4: bool,
     pub ipv6: bool
@@ -444,7 +445,7 @@ impl Default for ServerSettings {
             serve_errors: false,
             log: true,
             default_lang: None,
-            default_charset: String::from("utf-8"),
+            default_charset: None,
             homepage: None,
             ipv4: true,
             ipv6: false
