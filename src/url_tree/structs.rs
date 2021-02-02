@@ -478,8 +478,10 @@ pub struct DynamicObject {
     #[serde(default = "Vec::new")]
     pub args: Vec<String>,
     pub cmd_env: Vec<EnvironmentValue>,
-    #[serde(default = "return_none")]
+    #[serde(default = "Option::default")]
     pub query: Option<Query>,
+    #[serde(default = "bool::default")]
+    pub takes_certificate: bool,
     pub cache: bool,
     pub mime_type: Option<String>,
     pub gen_time: Option<u64>,
@@ -507,7 +509,7 @@ pub struct Query {
     pub private: bool
 }
 
-// This is just for defaults for serde
+/*// This is just for defaults for serde
 fn return_none<T>() -> Option<T> {
     None
-}
+}*/

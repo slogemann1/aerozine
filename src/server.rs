@@ -12,6 +12,9 @@ use std::error::Error;
 use std::hash::{ Hash, Hasher };
 use openssl::ssl::{ SslAcceptor, SslMethod, SslStream, SslVerifyMode };
 use openssl::pkcs12::Pkcs12;
+use openssl::hash::MessageDigest;
+use openssl::x509::{ X509, X509NameRef };
+use openssl::nid::Nid;
 use rand;
 use crate::{ log, Result, ServerError };
 use crate::url_tree::{ UrlTree, UrlNode, Path, FileType, DynamicObject, FileData };
@@ -132,6 +135,7 @@ fn handle_client(mut client: SslStream<TcpStream>, tree: Arc<UrlTree>) {
         }
     };
 
+    // Check for oversized url
     if num_bytes > 1026 {
         let err_msg = ServerError::new(
             String::from("Error: Url size was larger than 1024"),
@@ -150,7 +154,7 @@ fn handle_client(mut client: SslStream<TcpStream>, tree: Arc<UrlTree>) {
     }
 
     // Parse the request
-    let request = match protocol::parse_request(&buffer[0..num_bytes]) {
+    let mut request = match protocol::parse_request(&buffer[0..num_bytes]) {
         Ok(val) => val,
         Err(err) => { // If bad request, return error status
             let serve_errors = tree.settings.serve_errors;
@@ -164,8 +168,14 @@ fn handle_client(mut client: SslStream<TcpStream>, tree: Arc<UrlTree>) {
         }
     };
 
+    // Attach certificate to request if present
+    let cert_option = client.ssl().peer_certificate();
+    if let Some(cert) = &cert_option {
+        request.certificate = Some(cert);
+    }
+
     // Generate response and send it to client
-    let response = handle_request(&request, &tree);
+    let response = handle_request(request, &tree);
     match client.write(&response) {
         Ok(_) => (),
         Err(_) => ()
@@ -181,9 +191,8 @@ fn shutdown_client(mut client: SslStream<TcpStream>) {
     }
 }
 
-fn handle_request(request: &Request, tree: &UrlTree) -> Vec<u8> {
+fn handle_request(mut request: Request, tree: &UrlTree) -> Vec<u8> {
     // If path points to root, switch with homepage
-    let mut request = request.clone();
     if request.path.trim() == "" && tree.settings.homepage.is_some() {
         let path = tree.settings.homepage.as_ref().unwrap();
         request.path = path.clone();
@@ -194,7 +203,7 @@ fn handle_request(request: &Request, tree: &UrlTree) -> Vec<u8> {
         Ok(val) => val,
         Err(err) => return get_err_response(err, tree.settings.serve_errors, tree.settings.log)
     };
-    let (body, mime) = match get_resource(node, &request.query) {
+    let (body, mime) = match get_resource(node, &request.query, &request.certificate) {
         Ok(val) => val,
         Err(err) => return get_err_response(err, tree.settings.serve_errors, tree.settings.log)
     };
@@ -281,7 +290,7 @@ fn get_err_response(err: ServerError, serve_errors: bool, log: bool) -> Vec<u8> 
 }
 
 // Returns binary data and mime-type
-fn get_resource<'a>(node: &'a UrlNode, query: &Option<String>) -> Result<(Vec<u8>, &'a str)> {
+fn get_resource<'a>(node: &'a UrlNode, query: &Option<String>, certificate: &Option<&X509>) -> Result<(Vec<u8>, &'a str)> {
     let not_found_err = || Err(ServerError::new(
         String::from("Error: Resource not found"),
         StatusCode::NotFound
@@ -308,7 +317,7 @@ fn get_resource<'a>(node: &'a UrlNode, query: &Option<String>) -> Result<(Vec<u8
                 binary_data: None
             }
         ) => {
-            let binary_data = load_data(meta_data, query)?;
+            let binary_data = load_data(meta_data, query, certificate)?;
             let mime_type = meta_data.get_mime_type();
 
             Ok((
@@ -323,13 +332,13 @@ fn get_resource<'a>(node: &'a UrlNode, query: &Option<String>) -> Result<(Vec<u8
     result
 }
 
-fn load_data(file_type: &FileType, query: &Option<String>) -> Result<Vec<u8>> {
+fn load_data(file_type: &FileType, query: &Option<String>, certificate: &Option<&X509>) -> Result<Vec<u8>> {
     let internal_error = |err: &dyn Display| Err(ServerError::new(
         format!("Error: Resource could not be retrieved. {}", err),
         StatusCode::TemporaryFailure
     ));
     
-    if let FileType::Normal(val) = file_type {
+    if let FileType::Normal(val) = file_type { // For normal and link files read loaded data or load page
         match fs::read(&val.path.original) {
             Ok(val) => return Ok(val),
             Err(err) => return internal_error(&err)
@@ -341,48 +350,33 @@ fn load_data(file_type: &FileType, query: &Option<String>) -> Result<Vec<u8>> {
             Err(err) => return internal_error(&err)
         }
     }
-    else if let FileType::Dynamic(val) = file_type {
+    else if let FileType::Dynamic(val) = file_type { // For dynamic content either retrieve cache or generate
         if val.cache {
             return get_cached_data(val);
         }
 
-        return load_dynamic_content(val, query);
+        return load_dynamic_content(val, query, certificate);
     }
     
     internal_error(&"")
 }
 
-fn load_dynamic_content(dynamic_object: &DynamicObject, query: &Option<String>) -> Result<Vec<u8>> {
+fn get_cached_data(dynamic_object: &DynamicObject) -> Result<Vec<u8>> {
+    let file_path = format!("{}/{}", &*CACHE_DIR, get_hash(dynamic_object));
+    match fs::read(file_path) {
+        Ok(val) => Ok(val),
+        Err(_) => load_dynamic_content(dynamic_object, &None, &None)
+    }
+}
+
+fn load_dynamic_content(dynamic_object: &DynamicObject, query: &Option<String>, certificate: &Option<&X509>) -> Result<Vec<u8>> {
     let cgi_error = |err: &dyn Display| Err(ServerError::new(
         format!("Error: Process failed to generate content. {}", err),
         StatusCode::CGIError
     ));
-
-    // Insert an entry for the file
-    let temp_file_num;
-    let mut file_map = get_unique_file_list()?;
-    loop {
-        let random_num = rand::random::<u64>();
-        if file_map.contains_key(&random_num) {
-            continue;
-        }
-
-        file_map.insert(random_num, Instant::now());
-        temp_file_num = random_num;
-        break;
-    }
-    drop(file_map); // Drop mutex guard so read_and_remove() can use it
-
-    // Get the path
-    let temp_file_path = match env::current_dir() {
-        Ok(mut val) => {
-            val.push(TEMP_DIR);
-            val.push(temp_file_num.to_string());
-            val
-        },
-        Err(err) => return cgi_error(&err)
-    };
-    let temp_file_path = temp_file_path.display().to_string();
+    
+    // Get the file path
+    let (temp_file_path, temp_file_num) = get_unique_file_path()?;
 
     // Create process
     let mut process = Command::new(&dynamic_object.program_path);
@@ -430,6 +424,43 @@ fn load_dynamic_content(dynamic_object: &DynamicObject, query: &Option<String>) 
         }
     }
 
+    // Handle certificate
+    let cert_file_info;
+    if dynamic_object.takes_certificate {
+        if let Some(cert) = certificate {
+            // Get new path to write file
+            let (cert_file_path, cert_file_num) = get_unique_file_path()?;
+            
+            // Write certificate data to the file
+            let certificate_formatted = format_certificate(cert);
+            match fs::write(&cert_file_path, certificate_formatted.as_bytes()) {
+                Ok(_) => (),
+                Err(err) => return cgi_error(&err)
+            }
+
+            // Add command line argument for certifcate file path
+            process.arg(
+                format!(
+                    "cert_file_path='{}'",
+                    cert_file_path
+                )
+            );
+
+            cert_file_info = Some((cert_file_path, cert_file_num));
+        }
+        else {
+            // If no certificate has been given return certificate required
+            return Err(ServerError {
+                message: String::from("A certificate is required to access this content"),
+                is_meta: true,
+                status_code: StatusCode::CertificateRequired
+            });
+        }
+    }
+    else {
+        cert_file_info = None;
+    }
+
     // Start process
     let mut process = match process.spawn() {
         Ok(val) => val,
@@ -442,6 +473,11 @@ fn load_dynamic_content(dynamic_object: &DynamicObject, query: &Option<String>) 
     while start_time.elapsed().as_secs() < gen_time {
         let poll_exit = process.try_wait();
         if let Ok(Some(_)) = poll_exit {
+            // If certificate file has been created, remove it
+            if let Some((cert_file_path, cert_file_num)) = cert_file_info {
+                remove_unique_file(&cert_file_path, cert_file_num);
+            }
+            // Return the data read from the temp file and remove file
             return read_and_remove(&temp_file_path, temp_file_num);
         }
         else {
@@ -450,6 +486,69 @@ fn load_dynamic_content(dynamic_object: &DynamicObject, query: &Option<String>) 
     }
 
     cgi_error(&"")
+}
+
+fn format_certificate(certificate: &X509) -> String {
+    let concat_name_refs = |name_refs: &X509NameRef, nid, concat_char| {
+        name_refs.entries_by_nid(nid)
+            .map(|entry| entry.data().as_utf8())
+            .filter(|val| val.is_ok())
+            .map(|val| val.unwrap().to_string())
+            .collect::<Vec<String>>()
+            .join(concat_char)
+    };
+
+    // Get fingerprint
+    let fingerprint = match certificate.digest(MessageDigest::sha256()) {
+        Ok(digest) => {
+            digest.as_ref()
+                .iter()
+                .map(|val| format!("{:02X}", val))
+                .collect()
+        },
+        Err(_) => String::from("Error")
+    };
+
+    // Get more information
+    let subject_names = certificate.subject_name();
+    let subject = concat_name_refs(subject_names, Nid::COMMONNAME, ",");
+    let email = concat_name_refs(subject_names, Nid::PKCS9_EMAILADDRESS, ",");
+    let domain = concat_name_refs(subject_names, Nid::DOMAINCOMPONENT, ".");
+    let country_name = concat_name_refs(subject_names, Nid::COUNTRYNAME, ",");
+    let province_name = concat_name_refs(subject_names, Nid::STATEORPROVINCENAME, ",");
+    let locality_name = concat_name_refs(subject_names, Nid::LOCALITYNAME, ",");
+    let organization_name = concat_name_refs(subject_names, Nid::ORGANIZATIONNAME, ",");
+    let org_unit_name = concat_name_refs(subject_names, Nid::ORGANIZATIONALUNITNAME, ",");
+
+
+    // Get vaild after / before dates
+    let after_date = format!("{}", certificate.not_after());
+    let before_date = format!("{}", certificate.not_before());
+
+    let string_unwrap = |string: String| {
+        match string.trim() {
+            "" => String::from("__null"),
+            _ => string
+        }
+    };
+
+    // Format the values
+    format!(
+        "fingerprint={}\n\
+        subject={}\n\
+        email={}\n\
+        domain={}\n\
+        country={}\n\
+        province={}\n\
+        locality={}\n\
+        organization={}\n\
+        organization_unit={}\n\
+        valid_after={}\n\
+        valid_until={}",
+        fingerprint, string_unwrap(subject), string_unwrap(email), string_unwrap(domain),
+        string_unwrap(country_name), string_unwrap(province_name), string_unwrap(locality_name),
+        string_unwrap(organization_name), string_unwrap(org_unit_name), before_date, after_date
+    )
 }
 
 fn read_and_remove(file_path: &str, unique_num: u64) -> Result<Vec<u8>> {
@@ -468,24 +567,58 @@ fn read_and_remove(file_path: &str, unique_num: u64) -> Result<Vec<u8>> {
         Err(err) => return cgi_error(&err)
     };
 
-    // Remove the file and the entry
-    if let Ok(_) = fs::remove_file(file_path) {
-        let mut file_map = match get_unique_file_list() {
-            Ok(val) => val,
-            Err(_) => return Ok(data)
-        };
-        file_map.remove(&unique_num);   
-    }
+    // Remove the entry and file
+    remove_unique_file(file_path, unique_num);
 
     Ok(data)
 }
 
-fn get_cached_data(dynamic_object: &DynamicObject) -> Result<Vec<u8>> {
-    let file_path = format!("{}/{}", &*CACHE_DIR, get_hash(dynamic_object));
-    match fs::read(file_path) {
-        Ok(val) => Ok(val),
-        Err(_) => load_dynamic_content(dynamic_object, &None)
+fn remove_unique_file(file_path: &str, file_id: u64) {
+    // Remove the file and the entry
+    if let Ok(_) = fs::remove_file(file_path) {
+        let mut file_map = match get_unique_file_list() {
+            Ok(val) => val,
+            Err(_) => return
+        };
+        file_map.remove(&file_id);
     }
+}
+
+// Returns path and id
+fn get_unique_file_path() -> Result<(String, u64)> {
+    // Insert an entry for the file and get id
+    let temp_file_num;
+    let mut file_map = get_unique_file_list()?;
+    loop {
+        let random_num = rand::random::<u64>();
+        if file_map.contains_key(&random_num) {
+            continue;
+        }
+
+        file_map.insert(random_num, Instant::now());
+        temp_file_num = random_num;
+        break;
+    }
+
+    // Get file path
+    let temp_file_path = match env::current_dir() {
+        Ok(mut val) => {
+            val.push(TEMP_DIR);
+            val.push(temp_file_num.to_string());
+            val
+        },
+        Err(err) => {
+            return Err(ServerError::new(
+                format!("Error: Failed to read generated content. {}", err),
+                StatusCode::CGIError
+            ));
+        }
+    };
+    
+    Ok((
+        temp_file_path.display().to_string(),
+        temp_file_num
+    ))
 }
 
 fn get_unique_file_list() -> Result<MutexGuard<'static, HashMap<u64, Instant>>> {
@@ -545,7 +678,7 @@ fn cache_files(tree: &UrlTree) {
 
     for node in all_nodes {
         if let FileType::Dynamic(dyn_obj) = &node.data.as_ref().unwrap().meta_data { // The data is always dynamic object
-            let data = match load_dynamic_content(dyn_obj, &None) {
+            let data = match load_dynamic_content(dyn_obj, &None, &None) {
                 Ok(val) => val,
                 Err(err) => {
                     log(&format!("Error: Failed to cache file. {}", err));

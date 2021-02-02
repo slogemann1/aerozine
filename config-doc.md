@@ -47,7 +47,7 @@ must be named "server_settings.json". The format is as follows:
     "log": true
     // The language of the files served by the server, defaults to null
     "default_lang": "en",
-    // The text encoding of the files served by the server, defaults to "utf-8"
+    // The text encoding of the files served by the server, defaults to null
     "default_charset": "utf-8",
     // The url path relative to the root the server uses when recieving traffic at the root
     // (e.g. user requests "gemini://www.example.com"), defaults to null
@@ -113,7 +113,7 @@ or not.** The format is as follows:
 This object specifies various parameters for the execution of a program to provide
 dynamically generated content at a specific url path. A unique temporary filename
 will be provided as the first argument to the program generating the content in the
-format: unique_file_path="/some/path/here". This path will be absolute. The format
+format: unique_file_path='/some/path/here'. This path will be absolute. The format
 for the dynamic object is as follows:
 ```js
 {
@@ -126,7 +126,8 @@ for the dynamic object is as follows:
     // The arguments to be passed to the program. These will be passed before the temporary
     // file path and the query, defaults to []
     "args": ["echo.py"],
-    // The working directory for the program to be run in. This path should be absolute
+    // The working directory for the program to be run in. This path should be absolute or relative
+    // to the working directory of the server
     "cmd_working_dir": "/home/pi/Desktop/server/cgi",
     // A list of environment values and their keys which should determine the environment
     // of the program to run
@@ -137,13 +138,19 @@ for the dynamic object is as follows:
         },
     ],
     // This determines the query that should be requested at this url. The resulting
-    // value will be passed on the command line in the following format: query="value".
+    // value will be passed on the command line in the following format: query='value'.
     // Note that all characters will be escaped as needed. *In addition to regular url
     // escape codes, ' is escaped as %27 and " as %22*. This defaults to null
     "query": {
         "display_text": "Enter a message", // The text prompt for retrieving the query
         "private": false // Whether or not the query contains sensitive information
     },
+    // This determines whether or not a client certificate is required in order to generate
+    // the content. If enabled, the absolute path for a file which contains formatted
+    // certificate information will be passed on the command line in the following format:
+    // cert_file_path='/path/to/formatted/data/file'. The format of the contained data is
+    // described below under Client Certificate Data. This option defaults to false  
+    "takes_certificate": false
     // This determines whether or not the program will cache the output of the program
     // instead of re-running it on each request. The time between each cache is determined
     // in the server settings
@@ -163,6 +170,28 @@ for the dynamic object is as follows:
 The idea behind this example is that the cgi python program will read in the command line arguments
 for query and file path and then output the query into the file before exiting. Deleting the temporary
 file is handled by the server.
+
+### Client Certificate Data
+The data in the file passed when generating dynamic content which requires a client certificate follows
+a simple key=value format with each key-value pair being seperated by a line break. If the key is not 
+present, the corresponding value will be __null. The used keys are shown in the following:
+```
+fingerprint=D04B98F48E8F8BCC15C6AE5AC050801CD6DCFD428FB5F9E65C4E16E7807340FA
+subject=name
+email=name@example.com
+domain=www.name.com
+country=US
+province=New York
+locality=Exampletown
+organization=Example Incorporated
+organization_unit=Example Unit
+valid_after=Jan 19 14:56:57 2021 GMT
+valid_until=Jan  1 12:46:01 2022 GMT
+```
+Here the fingerprint is the SHA256 digest of the certificate and the times are formatted with a
+3-letter month code the day, space-padded, then the hours, minutes and seconds, zero-padded and
+seperated by colons, followed by the year.
+
 
 ### Link Object
 This object specifies url links to other files. This can be used to either provide multiple

@@ -1,4 +1,5 @@
 use std::str;
+use openssl::x509::X509;
 use crate::Result;
 use crate::ServerError;
 
@@ -19,7 +20,7 @@ pub enum StatusCode {
     Gone, // Unimplemented (maybe in future)
     ProxyRequestRefused,
     BadRequest,
-    CertificateRequired, //TODO
+    CertificateRequired,
     CertificateUnauthorized, //TODO
     CertificateInvalid //TODO
 }
@@ -75,11 +76,11 @@ impl Response {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct Request {
+pub struct Request<'a> {
     pub domain: String,
     pub path: String,
-    pub query: Option<String>
+    pub query: Option<String>,
+    pub certificate: Option<&'a X509>
 }
 
 pub fn parse_request(bytes: &[u8]) -> Result<Request> {
@@ -168,7 +169,8 @@ pub fn parse_request(bytes: &[u8]) -> Result<Request> {
         Request {
             domain,
             path,
-            query
+            query,
+            certificate: None
         }
     )
 }

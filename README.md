@@ -12,11 +12,11 @@ server is managed by various configuration files in json format as specified und
 - Serve on multiple domains
 - Extensive configuration options
 - Error logging
+- Client certificates
 
 # Upcoming Features
 - More precise status codes through process return values
-- Option to pass values (query/temp file path) through environment variables
-- Client certificates
+- Option to pass values (query, temp file path, certificate file path) through environment variables
 
 # How to Install
 Aerozine can be installed either by downloading the latest release for your platform which is indicated by the name
