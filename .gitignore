@@ -2,5 +2,6 @@
 /data
 /root
 /temp
+/cgi
 log.txt
 server_settings.json

@@ -472,7 +472,33 @@ fn load_dynamic_content(dynamic_object: &DynamicObject, query: &Option<String>, 
     let gen_time = dynamic_object.gen_time.unwrap(); // gen_time is always set at this point
     while start_time.elapsed().as_secs() < gen_time {
         let poll_exit = process.try_wait();
-        if let Ok(Some(_)) = poll_exit {
+        if let Ok(Some(status)) = poll_exit {
+            // If a status code has been returned, either ignore it (if exited normally) or return as error (for self-determined gemini response codes)
+            if let Some(status_code) = status.code() {
+                if status_code != 0 && status_code != 20 {
+                    let message = match String::from_utf8(read_and_remove(&temp_file_path, temp_file_num)?) {
+                        Ok(val) => val,
+                        Err(_) => return cgi_error(&"The provided meta field for the response was not valid utf-8")
+                    };
+                    let status_code = match StatusCode::from_i32(status_code) {
+                        Some(val) => val,
+                        None => return cgi_error(&format!("Invalid status code {} returned", status_code))
+                    };
+
+                    // If certificate file has been created, remove it
+                    if let Some((cert_file_path, cert_file_num)) = cert_file_info {
+                        remove_unique_file(&cert_file_path, cert_file_num);
+                    }
+
+                    return Err(ServerError {
+                        message,
+                        status_code,
+                        is_meta: true
+                    });
+                }
+                // If status was ok default case is used
+            }
+            
             // If certificate file has been created, remove it
             if let Some((cert_file_path, cert_file_num)) = cert_file_info {
                 remove_unique_file(&cert_file_path, cert_file_num);
@@ -485,7 +511,7 @@ fn load_dynamic_content(dynamic_object: &DynamicObject, query: &Option<String>, 
         }
     }
 
-    cgi_error(&"")
+    cgi_error(&"Process did not exit within the expected time or exited without producing a result")
 }
 
 fn format_certificate(certificate: &X509) -> String {

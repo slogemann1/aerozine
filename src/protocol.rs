@@ -48,6 +48,30 @@ impl StatusCode {
             Self::CertificateInvalid => 62
         }
     }
+
+    pub fn from_i32(code: i32) -> Option<Self> {
+        match code {
+            10 => Some(Self::Input),
+            11 => Some(Self::SensitiveInput),
+            20 => Some(Self::Success),
+            30 => Some(Self::RedirectTemporary),
+            31 => Some(Self::RedirectPermenent),
+            40 => Some(Self::TemporaryFailure),
+            41 => Some(Self::ServerUnavailible),
+            42 => Some(Self::CGIError),
+            43 => Some(Self::ProxyError),
+            44 => Some(Self::SlowDown),
+            50 => Some(Self::PermanentFailure),
+            51 => Some(Self::NotFound),
+            52 => Some(Self::Gone),
+            53 => Some(Self::ProxyRequestRefused),
+            59 => Some(Self::BadRequest),
+            60 => Some(Self::CertificateRequired),
+            61 => Some(Self::CertificateUnauthorized),
+            62 => Some(Self::CertificateInvalid),
+            _ => None
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
