@@ -4,7 +4,7 @@ use std::fs::{ self, File };
 use std::io::{ Read, Write };
 use std::thread;
 use std::collections::{ HashMap, hash_map::DefaultHasher };
-use std::process::Command;
+use std::process::{ self, Command };
 use std::fmt::Display;
 use std::time::{ Instant, Duration };
 use std::env;
@@ -16,7 +16,7 @@ use openssl::hash::MessageDigest;
 use openssl::x509::{ X509, X509NameRef };
 use openssl::nid::Nid;
 use rand;
-use crate::{ log, Result, ServerError };
+use crate::{ log, expect_pretty, Result, ServerError };
 use crate::url_tree::{ UrlTree, UrlNode, Path, FileType, DynamicObject, FileData };
 use crate::protocol::{ self, Request, Response, StatusCode };
 
@@ -30,33 +30,34 @@ lazy_static! {
 }
 
 pub fn run_server(tree: UrlTree) {
+    // Create Arc for multithreading
     let tree = Arc::new(tree);
 
     // Get certificate
     let cert_src = &tree.settings.tls_profile;
     let cert_passwd = &tree.settings.profile_password;
-    let mut pfx_file = File::open(cert_src).expect("Critical Error: Failed to open certificate");
+    let mut pfx_file = expect_pretty(File::open(cert_src), "Critical Error: Failed to open certificate");
     let mut pfx_data: Vec<u8> = vec![];
-    pfx_file.read_to_end(&mut pfx_data).expect("Critical Error: Failed to read certifcate");
-    let pkcs12 = Pkcs12::from_der(&pfx_data).expect("Critical Error: Failed to parse pfx file (bad certificate)");
-    let identity = pkcs12.parse(cert_passwd).expect("Critical Error: Failed to create identity (incorrect password)");
+    expect_pretty(pfx_file.read_to_end(&mut pfx_data), "Critical Error: Failed to read certifcate");
+    let pkcs12 = expect_pretty(Pkcs12::from_der(&pfx_data), "Critical Error: Failed to parse pfx file (bad certificate)");
+    let identity = expect_pretty(pkcs12.parse(cert_passwd), "Critical Error: Failed to create identity (incorrect password)");
 
     // Create Tcp Listeners based on ipv4/6 settings
     let mut listeners: Vec<TcpListener> = Vec::new();
     if tree.settings.ipv6 {
-        let listener = TcpListener::bind("[::]:1965").expect("Critical Error: Failed to bind to address (ipv6)");
+        let listener = expect_pretty(TcpListener::bind("[::]:1965"), "Critical Error: Failed to bind to address (ipv6)");
         listeners.push(listener);
     }
     if tree.settings.ipv4 {
-        let listener = TcpListener::bind("0.0.0.0:1965").expect("Critical Error: Failed to bind to address (ipv4)");
+        let listener = expect_pretty(TcpListener::bind("0.0.0.0:1965"), "Critical Error: Failed to bind to address (ipv4)");
         listeners.push(listener);
     }
 
     // Create Tls wrapper for acceptors based on certificate
     let cert_init_error = "Critical Error: Failed to initialize acceptor";
     let mut acceptor = SslAcceptor::mozilla_intermediate(SslMethod::tls()).expect(cert_init_error);
-    acceptor.set_certificate(&identity.cert).expect(cert_init_error);
-    acceptor.set_private_key(&identity.pkey).expect(cert_init_error);
+    expect_pretty(acceptor.set_certificate(&identity.cert), cert_init_error);
+    expect_pretty(acceptor.set_private_key(&identity.pkey), cert_init_error);
     acceptor.set_verify_callback(SslVerifyMode::PEER, |_, _| true);
     let acceptor = Arc::new(acceptor.build());
     
@@ -80,7 +81,8 @@ pub fn run_server(tree: UrlTree) {
 
     // Stop if neither ipv6 or ipv4 is enabled
     if listeners.len() == 0 {
-        panic!("Critical Error: Either ipv4 or ipv6 must be enabled in the server settings to run the program");
+        eprintln!("Critical Error: Either ipv4 or ipv6 must be enabled in the server settings to run the program");
+        process::exit(101);
     }
 
     // Log start of server

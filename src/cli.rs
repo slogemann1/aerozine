@@ -1,6 +1,7 @@
 use std::fs;
 use clap::{ App, SubCommand, Arg };
 use serde_json;
+use crate::expect_pretty;
 use crate::url_tree::{ self, UrlNode, ServerSettings, Config };
 
 pub fn run_app() {
@@ -76,7 +77,7 @@ fn write_tree(domain: Option<&str>, outfile: Option<&str>) {
         match domain_node {
             Some(node) => tree_display = format!("{}\n", node),
             None => {
-                println!("Error: The domain {} could not be found", domain);
+                eprintln!("Error: The domain {} could not be found", domain);
                 return;
             }
         }
@@ -95,7 +96,7 @@ fn write_tree(domain: Option<&str>, outfile: Option<&str>) {
             fs::write(path, tree_display.as_bytes()).and_then(|_| Ok(())).unwrap();
             return;
         },
-        None => println!("{}", tree_display)
+        None => eprintln!("{}", tree_display)
     }
 }
 
@@ -103,13 +104,13 @@ fn create_template(path: &str) {
     let dir_fail = "Error: failed to create directory";
 
     // Create directories
-    fs::create_dir_all(format!("{}/root", path)).expect(dir_fail);
-    fs::create_dir(format!("{}/temp", path)).expect(dir_fail);
-    fs::create_dir(format!("{}/data", path)).expect(dir_fail);
-    fs::create_dir(format!("{}/cgi", path)).expect(dir_fail);
+    expect_pretty(fs::create_dir_all(format!("{}/root", path)), dir_fail);
+    expect_pretty(fs::create_dir(format!("{}/temp", path)), dir_fail);
+    expect_pretty(fs::create_dir(format!("{}/data", path)), dir_fail);
+    expect_pretty(fs::create_dir(format!("{}/cgi", path)), dir_fail);
 
     // Create log file
-    fs::write(format!("{}/log.txt", path), "".as_bytes()).expect("Failed to create log file");
+    expect_pretty(fs::write(format!("{}/log.txt", path), "".as_bytes()), "Failed to create log file");
 
     // Create server settings
     let settings = ServerSettings {
@@ -117,10 +118,14 @@ fn create_template(path: &str) {
         tls_profile: String::from("data/profile.pfx"),
         ..ServerSettings::default()
     };
-    let settings_display = serde_json::to_string_pretty(&settings)
-    .expect("Failed to serialize");
-    fs::write(format!("{}/server_settings.json", path), settings_display.as_bytes())
-    .expect("Failed to create server_settings file");
+    let settings_display = expect_pretty(serde_json::to_string_pretty(&settings), "Failed to serialize");
+    expect_pretty(
+        fs::write(
+            format!("{}/server_settings.json", path), 
+            settings_display.as_bytes()
+        ),
+        "Failed to create server_settings file"
+    );
 
     // Create config file
     let config = Config {
@@ -133,10 +138,14 @@ fn create_template(path: &str) {
         config_files: Vec::new(),
         default_preload: None
     };
-    let config_display = serde_json::to_string_pretty(&config)
-    .expect("Failed to serialize");
-    fs::write(format!("{}/root/config.json", path), config_display.as_bytes())
-    .expect("Failed to create config file");
+    let config_display = expect_pretty(serde_json::to_string_pretty(&config), "Failed to serialize");
+    expect_pretty(
+        fs::write(
+            format!("{}/root/config.json", path),
+            config_display.as_bytes()
+        ),
+        "Failed to create config file"
+    );
 
     // Create index.gmi
     let index_text = "\
@@ -146,6 +155,11 @@ fn create_template(path: &str) {
         * More example text\n\
         => gemini://gemini.circumlunar.space/docs/specification.gmi Example link\n\
     ";
-    fs::write(format!("{}/root/index.gmi", path), index_text.as_bytes())
-    .expect("Failed to create config file");
+    expect_pretty(
+        fs::write(
+            format!("{}/root/index.gmi", path),
+            index_text.as_bytes()
+        ),
+        "Failed to create config file"
+    );
 }

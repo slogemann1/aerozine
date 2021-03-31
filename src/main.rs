@@ -13,6 +13,7 @@ use std::fmt::{ Display, Formatter };
 use std::error::Error;
 use std::fs::{ self, OpenOptions };
 use std::io::Write;
+use std::process;
 use chrono::offset::Local;
 use protocol::StatusCode;
 
@@ -115,6 +116,17 @@ fn reset_temp(never_exit: bool) {
     }
 }
 
+// Function for nicer error messages
+fn expect_pretty<T, E>(wrapper: std::result::Result<T, E>, msg: &str) -> T {
+    if let Ok(val) = wrapper {
+        return val;
+    }
+    else {
+        eprintln!("{}", msg);
+        process::exit(101)
+    }
+}
+
 fn log(message: &str) {
     let time = Local::now();
     let time_formatted = time.format("%Y.%m.%d %H:%M:%S");
@@ -123,13 +135,13 @@ fn log(message: &str) {
     let mut log_file = match OpenOptions::new().create(true).append(true).open(LOG_FILE) {
         Ok(val) => val,
         Err(err) => {
-            println!("Error: Failed to log entry. {}\nLog Message:\n{}", err, log_entry);
+            eprintln!("Error: Failed to log entry. {}\nLog Message:\n{}", err, log_entry);
             return;
         }
     };
 
     match log_file.write_all(log_entry.as_bytes()) {
         Ok(_) => (),
-        Err(err) => println!("Error: Failed to log entry. {}\nLog Message:\n{}", err, log_entry)
+        Err(err) => eprintln!("Error: Failed to log entry. {}\nLog Message:\n{}", err, log_entry)
     };
 }
