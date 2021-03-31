@@ -2,7 +2,7 @@ use std::io::Read;
 use std::fs::{ self, OpenOptions };
 use std::collections::HashMap;
 use serde_json;
-use crate::log;
+use crate::{ log, expect_pretty };
 pub use structs::*;
 
 mod structs;
@@ -102,17 +102,16 @@ pub fn get_url_tree() -> UrlTree {
 }
 
 fn read_settings() -> ServerSettings {
-    let mut settings_file = OpenOptions::new()
+    let settings_file = OpenOptions::new()
         .read(true)
-        .open("server_settings.json")
-        .expect("Critical Error: could not open settings file");
+        .open("server_settings.json");
+    let mut settings_file = expect_pretty(settings_file, "Critical Error: Could not open settings file");
 
     let mut settings_json = String::new();
-    settings_file.read_to_string(&mut settings_json)
-        .expect("Critical Error: could not read settings file");
+    expect_pretty(settings_file.read_to_string(&mut settings_json), "Critical Error: Could not read settings file");
 
-    let settings: ServerSettings = serde_json::from_str(&settings_json)
-        .expect(&format!("Critical Error: invalid settings file"));
+    let settings: Result<ServerSettings, _> = serde_json::from_str(&settings_json);
+    let settings = expect_pretty(settings, "Critical Error: Invalid settings file");
     
     settings
 }
@@ -139,17 +138,18 @@ fn read_all_config_files(config_filenames: &Vec<String>, parent_path: &Path) -> 
 }
 
 fn read_config_file(filename: &str) -> Config {
-    let mut config_file = OpenOptions::new()
+    let config_file = OpenOptions::new()
         .read(true)
-        .open(filename)
-        .expect(&format!("Critical Error: could not open config file \"{}\"", filename));
+        .open(filename);
+    let mut config_file = expect_pretty(config_file, &format!("Critical Error: Could not open config file \"{}\"", filename));
 
     let mut config_json = String::new();
-    config_file.read_to_string(&mut config_json)
-        .expect(&format!("Critical Error: could not read config file \"{}\"", filename));
+    expect_pretty(config_file.read_to_string(&mut config_json), &format!("Critical Error: Could not read config file \"{}\"", filename));
     
-    serde_json::from_str(&config_json)
-        .expect(&format!("Critical Error: invalid config file \"{}\"", filename))
+    let config: Result<Config, _> = serde_json::from_str(&config_json);
+    let config = expect_pretty(config, &format!("Critical Error: Invalid config file \"{}\"", filename));
+
+    config
 }
 
 fn get_root_node(settings: &ServerSettings) -> UrlNode {
