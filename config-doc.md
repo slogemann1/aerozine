@@ -113,8 +113,14 @@ or not.** The format is as follows:
 This object specifies various parameters for the execution of a program to provide
 dynamically generated content at a specific url path. A unique temporary filename
 will be provided as the first argument to the program generating the content in the
-format: unique_file_path='/some/path/here'. This path will be absolute. The format
-for the dynamic object is as follows:
+format: unique_file_path='/some/path/here'. This path will be absolute.\
+To return a specific gemini status code, the process exit code should be made to
+match. The contents of the file will then be used as the meta line (except for 20).
+For example, if you want to except a password after the user has given in a username,
+the file contents could be 'Please enter your password:' with the process returning the
+exit code 11. If the process exits successfully (0) or with an exit code of 20, the contents
+of the file will be used as the body with the meta field corresponding to the pre-set mime-type.\
+The format for the dynamic object is as follows:
 ```js
 {
     // The url path for the content to be requested at, relative to the parent directory
@@ -173,8 +179,7 @@ file is handled by the server.
 
 ### Client Certificate Data
 The data in the file passed when generating dynamic content which requires a client certificate follows
-a simple key=value format with each key-value pair being seperated by a line break. If the key is not 
-present, the corresponding value will be __null. The used keys are shown in the following:
+a simple 'key=value' format with each key-value pair being seperated by a line break. If the data for the key is not present, the key will also not be present. The used keys are shown in the following example:
 ```
 fingerprint=D04B98F48E8F8BCC15C6AE5AC050801CD6DCFD428FB5F9E65C4E16E7807340FA
 subject=name

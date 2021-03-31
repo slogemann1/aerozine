@@ -13,9 +13,9 @@ server is managed by various configuration files in json format as specified und
 - Extensive configuration options
 - Error logging
 - Client certificates
+- Self determined status codes (for dynamic content)
 
 # Upcoming Features
-- More precise status codes through process return values
 - Option to pass values (query, temp file path, certificate file path) through environment variables
 
 # How to Install
