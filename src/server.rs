@@ -553,30 +553,33 @@ fn format_certificate(certificate: &X509) -> String {
     let after_date = format!("{}", certificate.not_after());
     let before_date = format!("{}", certificate.not_before());
 
-    let string_unwrap = |string: String| {
-        match string.trim() {
-            "" => String::from("__null"),
-            _ => string
+    // Helper for adding strings if not emtpy
+    let push_unwrap = |tot_string: &mut String, key: &str, val: &str| {
+        match val.trim() {
+            "" => (),
+            val => {
+                tot_string.push_str(key);
+                tot_string.push_str(val);
+                tot_string.push('\n');
+            }
         }
     };
 
     // Format the values
-    format!(
-        "fingerprint={}\n\
-        subject={}\n\
-        email={}\n\
-        domain={}\n\
-        country={}\n\
-        province={}\n\
-        locality={}\n\
-        organization={}\n\
-        organization_unit={}\n\
-        valid_after={}\n\
-        valid_until={}",
-        fingerprint, string_unwrap(subject), string_unwrap(email), string_unwrap(domain),
-        string_unwrap(country_name), string_unwrap(province_name), string_unwrap(locality_name),
-        string_unwrap(organization_name), string_unwrap(org_unit_name), before_date, after_date
-    )
+    let mut cert_string = String::with_capacity(330); // Estimate, may be far off
+    push_unwrap(&mut cert_string, "fingerprint=", &fingerprint);
+    push_unwrap(&mut cert_string, "subject=", &subject);
+    push_unwrap(&mut cert_string, "email=", &email);
+    push_unwrap(&mut cert_string, "domain=", &domain);
+    push_unwrap(&mut cert_string, "country=", &country_name);
+    push_unwrap(&mut cert_string, "province=", &province_name);
+    push_unwrap(&mut cert_string, "locality=", &locality_name);
+    push_unwrap(&mut cert_string, "organization=", &organization_name);
+    push_unwrap(&mut cert_string, "organization_unit=", &org_unit_name);
+    push_unwrap(&mut cert_string, "valid_after=", &before_date);
+    push_unwrap(&mut cert_string, "valid_until=", &after_date);
+
+    cert_string
 }
 
 fn read_and_remove(file_path: &str, unique_num: u64) -> Result<Vec<u8>> {
