@@ -28,12 +28,20 @@ vcpkg install openssl --triplet x64-windows-static-md
 These commands (in particular the last one) can take a while to run, as vcpkg installs a lot of dependencies
 to build openssl. Once these have run, you can follow the steps under Building the Executable
 
-## Install Openssl on Linux / Mac
-To download the openssl library on Linux or MacOS (not tested), you can simply use your package manager.
+## Install Openssl on Unix Systems
+### Linux
+To download the openssl library on Linux, you can simply use your package manager.
 For example on a Raspberry Pi:
 ```shell
 sudo apt install libssl-dev
 ```
+
+### MacOS
+To install openssl on your Mac, just use homebrew:
+```shell
+brew install openssl@1.1
+```
+The formulae can be found [here](https://formulae.brew.sh/formula/openssl@1.1).
 
 ## Building the Executable
 Once openssl has been installed, the executable can be built using cargo:
