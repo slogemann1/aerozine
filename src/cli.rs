@@ -162,4 +162,22 @@ fn create_template(path: &str) {
         ),
         "Failed to create config file"
     );
+
+    // create .gitignore file
+    let gitignore_text = "\
+        # certificates // keys in the data dir\n\
+        data/certificate.crt\n\
+        data/private.key\n\
+        data/profile.pfx\n\
+        \n\
+        # log\n\
+        log.txt\n\
+    ";
+    expect_pretty(
+        fs::write(
+            format!("{}/.gitignore", path), 
+            gitignore_text.as_bytes()
+        ), 
+        "Failed to create .gitignore file"
+    );
 }
