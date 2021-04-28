@@ -172,6 +172,9 @@ fn create_template(path: &str) {
         \n\
         # log\n\
         log.txt\n\
+        \n\
+        # cache\n\
+        /temp\n\
     ";
     expect_pretty(
         fs::write(
