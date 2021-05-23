@@ -177,11 +177,15 @@ fn handle_client(mut client: SslStream<TcpStream>, tree: Arc<UrlTree>) {
     }
 
     // Generate response and send it to client
+    let mut bytes_written_total = 0;
     let response = handle_request(request, &tree);
-    match client.write(&response) {
-        Ok(_) => (),
-        Err(_) => ()
-    };
+    while bytes_written_total < response.len() {
+        let bytes_written = match client.write(&response[bytes_written_total..]) {
+            Ok(val) => val,
+            Err(_) => return
+        };
+        bytes_written_total += bytes_written;
+    }
 
     shutdown_client(client);
 }
